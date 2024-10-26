@@ -166,6 +166,8 @@ adapt_pos |>
     head()
 ```
 
+Transform Cytof cofactor 5, Flow cytometry cofactor 150
+
 ```{r}
 # perform preprocessing
 phenograph <-
@@ -187,6 +189,39 @@ adapt_pos <-
 adapt_pos |>
     select(`CD19|FJComp-BUV C-A`,
            `CD38|FJComp-Blue B-A`) |>
+    head()
+```
+
+```{r}
+phenograph <-
+    phenograph |>
+    # mutate the input tof_tbl
+    mutate(
+        PhenoGraph = as.character(PhenoGraph),
+        Condition = as.character(Condition)
+    )
+
+phenograph |>
+    # use dplyr's select method to show that the columns have been changed
+    select(where(is.character)) |>
+    head()
+
+
+```
+
+### Create new variables
+
+```{r}
+adapt_files <- adapt_pos |>
+    select(file_name) |> 
+    distinct()
+
+adapt_pos <- adapt_pos |> 
+    mutate(time_point = str_extract(file_name, "V\\w+"))
+
+adapt_pos |>
+    # use dplyr's select method to show that the columns have been changed
+    select(where(is.character)) |>
     head()
 ```
 
