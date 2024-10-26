@@ -43,9 +43,10 @@ library(janitor)
 library(reshape2)
 library(matrixStats)
 library(rstatix)
+library(here)
 
 
-source("source_func.R")
+source(here("source_func.R"))
 
 # aesthetics
 
@@ -56,6 +57,20 @@ font_add("Avenir", "~/Library/Fonts/Avenir.ttf") # path to your Avenir.ttf file
 # rename it as "Avenir.ttf" & put it under "/Users/weiwen_zhang/Library/Fonts"
 
 
+
+
+```
+
+```{r}
+# if (!require(devtools)) install.packages("devtools")
+# devtools::install_github("keyes-timothy/tidytof")
+
+library(tidytof)
+```
+
+### Theme
+
+```{r}
 # initialize showtext
 showtext_auto()
 
@@ -86,7 +101,6 @@ tmp_theme = theme(
     strip.background = element_rect(colour = "gray", fill = "white", size = 0.5, linetype = "solid"), 
     aspect.ratio = 1
   )
-
 ```
 
 # read in FACS files
@@ -94,7 +108,7 @@ tmp_theme = theme(
 ```{r}
 
 
-input_dir = "raw/ITN089ST_adapt"
+input_dir = here("raw/ITN089ST_adapt")
 fcs_files <- list.files(input_dir, pattern = ".fcs", full.names = TRUE)
 fcs_files <- fcs_files[str_detect(fcs_files, "CD19\\+")]
 

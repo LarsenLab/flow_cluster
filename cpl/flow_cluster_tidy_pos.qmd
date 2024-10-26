@@ -16,6 +16,12 @@ Step5: Integrate Seurat objects to understand similarities and differences among
 
 [mojaveazure/seurat-disk: Interfaces for HDF5-based Single Cell File Formats (github.com)](https://github.com/mojaveazure/seurat-disk)
 
+### Additional resources
+
+<https://github.com/keyes-timothy/tidytof>
+
+<https://stemangiola.github.io/tidyseurat/>
+
 # library
 
 ```{r}
@@ -43,9 +49,10 @@ library(janitor)
 library(reshape2)
 library(matrixStats)
 library(rstatix)
+library(here)
 
 
-source("source_func.R")
+source(here("source_func.R"))
 
 # aesthetics
 
@@ -56,6 +63,20 @@ font_add("Avenir", "~/Library/Fonts/Avenir.ttf") # path to your Avenir.ttf file
 # rename it as "Avenir.ttf" & put it under "/Users/weiwen_zhang/Library/Fonts"
 
 
+
+
+```
+
+```{r}
+# if (!require(devtools)) install.packages("devtools")
+# devtools::install_github("keyes-timothy/tidytof")
+
+library(tidytof)
+```
+
+### Theme
+
+```{r}
 # initialize showtext
 showtext_auto()
 
@@ -83,10 +104,9 @@ tmp_theme = theme(
     panel.background = element_blank(),
     
     # facet
-    strip.background = element_rect(colour = "gray", fill = "white", size = 0.5, linetype = "solid"), 
+    strip.background = element_rect(colour = "gray", fill = "white", linewidth = 0.5, linetype = "solid"), 
     aspect.ratio = 1
   )
-
 ```
 
 # read in FACS files
@@ -94,13 +114,80 @@ tmp_theme = theme(
 ```{r}
 
 
-input_dir = "raw/ITN089ST_adapt"
+input_dir = here("raw/ITN089ST_adapt")
 fcs_files <- list.files(input_dir, pattern = ".fcs", full.names = TRUE)
 fcs_files <- fcs_files[str_detect(fcs_files, "CD19\\+")]
 
 
 fcs_set = read.ncdfFlowSet(fcs_files, emptyValue = FALSE) 
 
+```
+
+#### Reading data with `tof_read_data`
+
+```{r}
+tidytof_example_data("phenograph")
+#> [1] "/Library/Frameworks/R.framework/Versions/4.3-x86_64/Resources/library/tidytof/extdata/phenograph"
+```
+
+```{r}
+phenograph <-
+    tidytof_example_data("phenograph") |>
+    tof_read_data()
+
+phenograph |>
+    class()
+
+```
+
+### Our data tidytof
+
+```{r}
+adapt_pos <-
+    tof_read_data(input_dir)
+
+adapt_pos_seurat <- adapt_pos |> 
+    as_seurat()
+
+adapt_pos |>
+    class()
+```
+
+```{r}
+# before preprocessing
+phenograph |>
+    select(`CD45|Sm154`, `CD34|Nd148`, `CD38|Er167`) |>
+    head()
+
+# before preprocessing
+adapt_pos |>
+    select(`CD19|FJComp-BUV C-A`,
+           `CD38|FJComp-Blue B-A`) |>
+    head()
+```
+
+```{r}
+# perform preprocessing
+phenograph <-
+    phenograph |>
+    tof_preprocess()
+
+# inspect new values
+phenograph |>
+    select(`CD45|Sm154`, `CD34|Nd148`, `CD38|Er167`) |>
+    head()
+
+# perform preprocessing
+adapt_pos <-
+    adapt_pos |>
+    tof_preprocess(transform_fun = function(x) asinh(x/150))
+
+
+# inspect new values
+adapt_pos |>
+    select(`CD19|FJComp-BUV C-A`,
+           `CD38|FJComp-Blue B-A`) |>
+    head()
 ```
 
 # change channel name to marker name
