@@ -149,8 +149,8 @@ adapt_pos <-
 adapt_pos_seurat <- adapt_pos |> 
     as_seurat()
 
-adapt_pos |>
-    class()
+class(adapt_pos)
+class(adapt_pos_seurat)
 ```
 
 ```{r}
@@ -190,6 +190,8 @@ adapt_pos |>
     select(`CD19|FJComp-BUV C-A`,
            `CD38|FJComp-Blue B-A`) |>
     head()
+
+class(adapt_pos)
 ```
 
 ```{r}
@@ -206,7 +208,7 @@ phenograph |>
     select(where(is.character)) |>
     head()
 
-
+class(phenograph)
 ```
 
 ### Create new variables
@@ -216,11 +218,23 @@ adapt_files <- adapt_pos |>
     select(file_name) |> 
     distinct()
 
-adapt_pos2 <- adapt_pos |> 
+adapt_pos <- adapt_pos |> 
+    mutate(sample_id = str_remove(file_name, "\\.fcs")) |> 
+    mutate(sample_id = str_remove(sample_id, "export_"))  |> 
+    mutate(population = str_extract(sample_id, "CD19."))  |> 
     mutate(time_point = str_extract(file_name, "V\\w+")) |> 
+    mutate(visit = str_extract(time_point, "V.+(?=_)"))  |> 
     rename_with(~ str_remove(., "\\|.+")) |> 
     rename_with(~ str_replace(., "-", "_")) |> 
     rename_with(str_to_lower)
+
+
+adapt_pos2 <- adapt_pos |> 
+    separate(sample_id, into = c("study_id", "patient_id", "visit", "date", "panel", "drop", "source"), sep = "_", extra = "drop", remove = F) %>%
+    select(-drop) |> 
+    unite("sample_id", study_id:population, remove = F)
+
+class(adapt_pos)
 
 
 adapt_pos |>
@@ -229,15 +243,37 @@ adapt_pos |>
     head()
 ```
 
+### metadata
+
+```{r}
+
+
+
+class(adapt_pos2)
+
+class(adapt_pos)
+
+```
+
 ```{r}
 data(phenograph_data)
 
+# phenograph_data |>
+#     count(phenograph_cluster)
+
 phenograph_data |>
-    count(phenograph_cluster)
-
-
+    group_by(phenograph_cluster) |> 
+    summarise(n = n())
 
 ```
+
+\# Setting bins creates evenly spaced contours in the range of the data
+
+v + geom_contour(bins = 3)
+
+v + geom_contour(bins = 5)
+
+\# }
 
 ```{r}
 phenograph_data |>
@@ -248,17 +284,51 @@ phenograph_data |>
     geom_point(alpha = 0.5) +
     scale_x_continuous(limits = c(NA, 1.5)) +
     scale_y_continuous(limits = c(NA, 4)) +
+    theme_bw() 
+
+adapt_pos |>
+    # preprocess all numeric columns in the dataset
+    tof_preprocess(undo_noise = FALSE) |>
+    # make a scatterplot
+    ggplot(aes(x = cd38, y = cd138)) +
+    # geom_point(alpha = 0.5) +
+    # geom_contour() +
+    geom_density_2d(bins = 10, colour = "blue") +
+    # scale_x_continuous(limits = c(NA, 1.5)) +
+    # scale_y_continuous(limits = c(NA, 4)) +
+    theme_bw() + 
+    facet_wrap(vars(visit, population))
+
+
+adapt_pos |>
+    # preprocess all numeric columns in the dataset
+    tof_preprocess(undo_noise = FALSE) |>
+    # make a scatterplot
+    ggplot(aes(x = cd19, y = cd38)) +
+    # geom_point(alpha = 0.5) +
+    # geom_contour() +
+
+    geom_density_2d_filled(bins = 8,
+                           alpha = 0.5,
+                           colour = "blue") +
+        geom_density_2d(bins = 8) +
+    # scale_x_continuous(limits = c(NA, 1.5)) +
+    # scale_y_continuous(limits = c(NA, 4)) +
     theme_bw()
 
 adapt_pos |>
     # preprocess all numeric columns in the dataset
     tof_preprocess(undo_noise = FALSE) |>
     # make a scatterplot
-    ggplot(aes(x = CD19, y = CD38)) +
-    geom_point(alpha = 0.5) +
-    scale_x_continuous(limits = c(NA, 1.5)) +
-    scale_y_continuous(limits = c(NA, 4)) +
+    ggplot(aes(x = cd19, y = cd38)) +
+    # geom_point(alpha = 0.5) +
+    # geom_contour() +
+    geom_density_2d_filled(bins = 8, colour = "blue") +
+    # scale_x_continuous(limits = c(NA, 1.5)) +
+    # scale_y_continuous(limits = c(NA, 4)) +
     theme_bw()
+
+
 ```
 
 # change channel name to marker name
@@ -393,6 +463,32 @@ Obj_fcs <- AddMetaData(Obj_fcs, cbind(CellsMeta, metadata))
 ```
 
 # feature selection / dimension reduction / clustering
+
+```{r}
+VariableFeatures(Obj_fcs) <- rownames(Obj_fcs)
+
+Obj_fcs@assays$RNA$data = Obj_fcs@assays$RNA$counts
+
+
+Obj_fcs <- Obj_fcs %>% 
+    ScaleData() %>% 
+    RunPCA(verbose = TRUE) %>% 
+    FindNeighbors(dims = 1:13, verbose = TRUE) %>% 
+    FindClusters(verbose = TRUE, resolution = 0.5)
+```
+
+###  Seurat - tidytof
+
+```{r}
+adapt_pos_seurat <- adapt_pos |> 
+    as_seurat()
+
+adapt_pos |>
+    class()
+
+adapt_pos_seurat |>
+    class()
+```
 
 ```{r}
 VariableFeatures(Obj_fcs) <- rownames(Obj_fcs)
