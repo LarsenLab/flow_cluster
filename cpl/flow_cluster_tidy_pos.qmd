@@ -216,13 +216,49 @@ adapt_files <- adapt_pos |>
     select(file_name) |> 
     distinct()
 
-adapt_pos <- adapt_pos |> 
-    mutate(time_point = str_extract(file_name, "V\\w+"))
+adapt_pos2 <- adapt_pos |> 
+    mutate(time_point = str_extract(file_name, "V\\w+")) |> 
+    rename_with(~ str_remove(., "\\|.+")) |> 
+    rename_with(~ str_replace(., "-", "_")) |> 
+    rename_with(str_to_lower)
+
 
 adapt_pos |>
     # use dplyr's select method to show that the columns have been changed
     select(where(is.character)) |>
     head()
+```
+
+```{r}
+data(phenograph_data)
+
+phenograph_data |>
+    count(phenograph_cluster)
+
+
+
+```
+
+```{r}
+phenograph_data |>
+    # preprocess all numeric columns in the dataset
+    tof_preprocess(undo_noise = FALSE) |>
+    # make a scatterplot
+    ggplot(aes(x = cd34, y = cd38)) +
+    geom_point(alpha = 0.5) +
+    scale_x_continuous(limits = c(NA, 1.5)) +
+    scale_y_continuous(limits = c(NA, 4)) +
+    theme_bw()
+
+adapt_pos |>
+    # preprocess all numeric columns in the dataset
+    tof_preprocess(undo_noise = FALSE) |>
+    # make a scatterplot
+    ggplot(aes(x = CD19, y = CD38)) +
+    geom_point(alpha = 0.5) +
+    scale_x_continuous(limits = c(NA, 1.5)) +
+    scale_y_continuous(limits = c(NA, 4)) +
+    theme_bw()
 ```
 
 # change channel name to marker name
