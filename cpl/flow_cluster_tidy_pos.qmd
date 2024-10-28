@@ -29,6 +29,7 @@ library(flowCore)
 library(ncdfFlow)
 library(flowWorkspace)
 library(Seurat)
+library(tidyseurat)
 library(readxl)
 library(cowplot)
 library(ggplot2)
@@ -72,6 +73,10 @@ font_add("Avenir", "~/Library/Fonts/Avenir.ttf") # path to your Avenir.ttf file
 # devtools::install_github("keyes-timothy/tidytof")
 
 library(tidytof)
+
+# BiocManager::install("FlowSOM")
+# 
+# library(FlowSOM)
 ```
 
 ### Theme
@@ -119,7 +124,7 @@ fcs_files <- list.files(input_dir, pattern = ".fcs", full.names = TRUE)
 fcs_files <- fcs_files[str_detect(fcs_files, "CD19\\+")]
 
 
-fcs_set = read.ncdfFlowSet(fcs_files, emptyValue = FALSE) 
+# fcs_set = read.ncdfFlowSet(fcs_files, emptyValue = FALSE) 
 
 ```
 
@@ -143,14 +148,12 @@ phenograph |>
 ### Our data tidytof
 
 ```{r}
-adapt_pos <-
-    tof_read_data(input_dir)
+adapt <-
+    tof_read_data(input_dir) |> 
+    clean_names()
 
-adapt_pos_seurat <- adapt_pos |> 
-    as_seurat()
+class(adapt)
 
-class(adapt_pos)
-class(adapt_pos_seurat)
 ```
 
 ```{r}
@@ -160,9 +163,8 @@ phenograph |>
     head()
 
 # before preprocessing
-adapt_pos |>
-    select(`CD19|FJComp-BUV C-A`,
-           `CD38|FJComp-Blue B-A`) |>
+adapt |>
+    select(cd19_fj_comp_buv_c_a, cd20_fj_comp_red_a_a) |>
     head()
 ```
 
@@ -180,18 +182,16 @@ phenograph |>
     head()
 
 # perform preprocessing
-adapt_pos <-
-    adapt_pos |>
+adapt <- adapt |>
     tof_preprocess(transform_fun = function(x) asinh(x/150))
 
 
 # inspect new values
-adapt_pos |>
-    select(`CD19|FJComp-BUV C-A`,
-           `CD38|FJComp-Blue B-A`) |>
+adapt |>
+    select(cd19_fj_comp_buv_c_a, cd20_fj_comp_red_a_a) |>
     head()
 
-class(adapt_pos)
+class(adapt)
 ```
 
 ```{r}
@@ -214,33 +214,33 @@ class(phenograph)
 ### Create new variables
 
 ```{r}
-adapt_files <- adapt_pos |>
+adapt_files <- adapt |>
     select(file_name) |> 
     distinct()
 
-adapt_pos <- adapt_pos |> 
+adapt <- adapt |> 
     mutate(sample_id = str_remove(file_name, "\\.fcs")) |> 
     mutate(sample_id = str_remove(sample_id, "export_"))  |> 
     mutate(population = str_extract(sample_id, "CD19."))  |> 
+   mutate(sample_id = str_remove(sample_id, "_B_cell Panel_BM_CD19-")) |> 
     mutate(time_point = str_extract(file_name, "V\\w+")) |> 
-    mutate(visit = str_extract(time_point, "V.+(?=_)"))  |> 
+    mutate(visit = str_extract(time_point, "V\\w{0,2}(?=_)"))  |> 
+    rename_with(~ str_remove(., "_fj_comp_.+")) |>
     rename_with(~ str_remove(., "\\|.+")) |> 
     rename_with(~ str_replace(., "-", "_")) |> 
     rename_with(str_to_lower)
 
 
-adapt_pos2 <- adapt_pos |> 
-    separate(sample_id, into = c("study_id", "patient_id", "visit", "date", "panel", "drop", "source"), sep = "_", extra = "drop", remove = F) %>%
-    select(-drop) |> 
-    unite("sample_id", study_id:population, remove = F)
+# adapt_pos2 <- adapt_pos |> 
+#     separate(sample_id, into = c("study_id", "patient_id", "visit", "date", "panel", "drop", "source"), sep = "_", extra = "drop", remove = F) %>%
+#     select(-drop) |> 
+#     unite("sample_id", study_id:population, remove = F)
 
-class(adapt_pos)
+# adapt_pos3 <- adapt_pos |> 
+#     separate(sample_id, into = c("id", "visit"), sep = "V", remove = F)
 
+class(adapt)
 
-adapt_pos |>
-    # use dplyr's select method to show that the columns have been changed
-    select(where(is.character)) |>
-    head()
 ```
 
 ### metadata
@@ -248,10 +248,6 @@ adapt_pos |>
 ```{r}
 
 
-
-class(adapt_pos2)
-
-class(adapt_pos)
 
 ```
 
@@ -276,19 +272,19 @@ v + geom_contour(bins = 5)
 \# }
 
 ```{r}
-phenograph_data |>
-    # preprocess all numeric columns in the dataset
-    tof_preprocess(undo_noise = FALSE) |>
-    # make a scatterplot
-    ggplot(aes(x = cd34, y = cd38)) +
-    geom_point(alpha = 0.5) +
-    scale_x_continuous(limits = c(NA, 1.5)) +
-    scale_y_continuous(limits = c(NA, 4)) +
-    theme_bw() 
+# phenograph_data |>
+#     # preprocess all numeric columns in the dataset
+#     tof_preprocess(undo_noise = FALSE) |>
+#     # make a scatterplot
+#     ggplot(aes(x = cd34, y = cd38)) +
+#     geom_point(alpha = 0.5) +
+#     scale_x_continuous(limits = c(NA, 1.5)) +
+#     scale_y_continuous(limits = c(NA, 4)) +
+#     theme_bw() 
 
-adapt_pos |>
+adapt |>
     # preprocess all numeric columns in the dataset
-    tof_preprocess(undo_noise = FALSE) |>
+    # tof_preprocess(undo_noise = FALSE) |>
     # make a scatterplot
     ggplot(aes(x = cd38, y = cd138)) +
     # geom_point(alpha = 0.5) +
@@ -297,12 +293,12 @@ adapt_pos |>
     # scale_x_continuous(limits = c(NA, 1.5)) +
     # scale_y_continuous(limits = c(NA, 4)) +
     theme_bw() + 
-    facet_wrap(vars(visit, population))
+    facet_wrap(vars(population, visit))
 
 
-adapt_pos |>
+adapt |>
     # preprocess all numeric columns in the dataset
-    tof_preprocess(undo_noise = FALSE) |>
+    # tof_preprocess(undo_noise = FALSE) |>
     # make a scatterplot
     ggplot(aes(x = cd19, y = cd38)) +
     # geom_point(alpha = 0.5) +
@@ -316,18 +312,33 @@ adapt_pos |>
     # scale_y_continuous(limits = c(NA, 4)) +
     theme_bw()
 
-adapt_pos |>
+adapt |>
     # preprocess all numeric columns in the dataset
-    tof_preprocess(undo_noise = FALSE) |>
+    # tof_preprocess(undo_noise = FALSE) |>
     # make a scatterplot
     ggplot(aes(x = cd19, y = cd38)) +
     # geom_point(alpha = 0.5) +
     # geom_contour() +
-    geom_density_2d_filled(bins = 8, colour = "blue") +
+    geom_density_2d_filled(bins = 8, 
+                           alpha = 0.5,
+                           colour = "blue") +
     # scale_x_continuous(limits = c(NA, 1.5)) +
     # scale_y_continuous(limits = c(NA, 4)) +
     theme_bw()
 
+
+```
+
+### Create seurat obj
+
+```{r}
+adapt_seurat <- adapt |> 
+    as_seurat()
+
+adapt_seurat <- adapt_seurat |> 
+    FindVariableFeatures()
+
+pbmc_small <- pbmc_small
 
 ```
 
@@ -336,12 +347,12 @@ adapt_pos |>
 ```{r}
 
 
-name.marker <- as.vector(ifelse(!(is.na(pData(parameters(fcs_set[[1]]))$desc)),
-             pData(parameters(fcs_set[[1]]))$desc,colnames(fcs_set[[1]])))
-
-
-
-colnames(fcs_set) <- name.marker
+# name.marker <- as.vector(ifelse(!(is.na(pData(parameters(fcs_set[[1]]))$desc)),
+#              pData(parameters(fcs_set[[1]]))$desc,colnames(fcs_set[[1]])))
+# 
+# 
+# 
+# colnames(fcs_set) <- name.marker
 
 
 
@@ -465,42 +476,68 @@ Obj_fcs <- AddMetaData(Obj_fcs, cbind(CellsMeta, metadata))
 # feature selection / dimension reduction / clustering
 
 ```{r}
-VariableFeatures(Obj_fcs) <- rownames(Obj_fcs)
+VariableFeatures(adapt_seurat) <- rownames(adapt_seurat)
 
 Obj_fcs@assays$RNA$data = Obj_fcs@assays$RNA$counts
 
 
-Obj_fcs <- Obj_fcs %>% 
-    ScaleData() %>% 
-    RunPCA(verbose = TRUE) %>% 
-    FindNeighbors(dims = 1:13, verbose = TRUE) %>% 
-    FindClusters(verbose = TRUE, resolution = 0.5)
+
 ```
 
-###  Seurat - tidytof
+```{r}
+
+class(adapt)
+
+clust <- c("cd19", "cd20", "cxcr3", "cd21", "cd38", "cd138" )
+
+pheno_clust <- adapt |>
+    tof_cluster(method = "phenograph", cluster_cols = clust, 
+                augment = T)
+
+class(pheno_clust)
+
+pheno_clust |>
+    select(sample_id, .phenograph_cluster, everything()) |>
+    head()
+```
 
 ```{r}
-adapt_pos_seurat <- adapt_pos |> 
-    as_seurat()
+# perform the dimensionality reduction
+phenograph_tsne <-
+    pheno_clust |>
+    tof_reduce_dimensions(method = "tsne")
 
-adapt_pos |>
-    class()
+# select only the tsne embedding columns using a tidyselect helper (contains)
+phenograph_tsne |>
+    select(contains("tsne")) |>
+    head()
 
-adapt_pos_seurat |>
-    class()
+```
+
+```{r}
+# plot the tsne embeddings using color to distinguish between clusters
+phenograph_tsne |>
+    slice_sample( n = 10000) |> 
+    ggplot(aes(x = .tsne1, y = .tsne2, color = .phenograph_cluster)) +
+    # geom_point(shape = 21) +
+    geom_point() +
+    theme_bw() +
+    labs(fill = NULL)
 ```
 
 ```{r}
 VariableFeatures(Obj_fcs) <- rownames(Obj_fcs)
 
-Obj_fcs@assays$RNA$data = Obj_fcs@assays$RNA$counts
+adapt_vars <- rownames(adapt_seurat)
+
+# Obj_fcs@assays$RNA$data = Obj_fcs@assays$RNA$counts
 
 
-Obj_fcs <- Obj_fcs %>% 
-    ScaleData() %>% 
-    RunPCA(verbose = TRUE) %>% 
-    FindNeighbors(dims = 1:13, verbose = TRUE) %>% 
-    FindClusters(verbose = TRUE, resolution = 0.5)
+# Obj_fcs <- Obj_fcs %>% 
+#     ScaleData() %>% 
+#     RunPCA(verbose = TRUE) %>% 
+#     FindNeighbors(dims = 1:13, verbose = TRUE) %>% 
+#     FindClusters(verbose = TRUE, resolution = 0.5)
 ```
 
 # down-sample for RunUMAP & RunTSNE
@@ -523,10 +560,6 @@ table <- table(sample_ids)
 
 eventable <- setNames(rep(min(table), length(table)), names(table))
 
-
-
-
-
 tsne_ncells <- eventable
 
 
@@ -541,14 +574,39 @@ down_inds <- unlist(down_inds)
 
 Obj_fcs_down <- subset(Obj_fcs, cells = down_inds)
 
-Obj_fcs_down <- Obj_fcs_down %>% 
+# Obj_fcs_down <- Obj_fcs_down %>% 
+#   RunUMAP(dims = 1:13, verbose = TRUE) %>% 
+#   RunTSNE(dims = 1:13, verbose = TRUE)
+
+VariableFeatures(adapt_seurat) <- rownames(adapt_seurat)
+
+adapt_seurat <- adapt_seurat %>% 
+    ScaleData() %>% 
+    RunPCA(verbose = TRUE) %>% 
+    FindNeighbors(dims = 1:13, verbose = TRUE) %>% 
+    FindClusters(verbose = TRUE, resolution = 0.5)
+
+adapt_seurat <- adapt_seurat %>% 
   RunUMAP(dims = 1:13, verbose = TRUE) %>% 
   RunTSNE(dims = 1:13, verbose = TRUE)
 
-DimPlot(Obj_fcs_down, reduction = "umap", pt.size = 1)
-DimPlot(Obj_fcs_down, reduction = "tsne", pt.size = 1)
+# DimPlot(Obj_fcs_down, reduction = "umap", pt.size = 1)
+# DimPlot(Obj_fcs_down, reduction = "tsne", pt.size = 1)
+
+DimPlot(adapt_seurat, reduction = "umap", pt.size = 1)
+DimPlot(adapt_seurat, reduction = "tsne", pt.size = 1)
 
 
+```
+
+```{r}
+
+
+adapt_seurat <- adapt_seurat %>% 
+    ScaleData() %>% 
+    RunPCA(verbose = TRUE) %>% 
+    FindNeighbors(dims = 1:13, verbose = TRUE) %>% 
+    FindClusters(verbose = TRUE, resolution = 0.5)
 ```
 
 # ggplot
