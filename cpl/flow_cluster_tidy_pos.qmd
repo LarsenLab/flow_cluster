@@ -76,7 +76,7 @@ library(tidytof)
 
 # BiocManager::install("FlowSOM")
 # 
-# library(FlowSOM)
+library(FlowSOM)
 ```
 
 ### Theme
@@ -133,6 +133,8 @@ fcs_files <- fcs_files[str_detect(fcs_files, "CD19\\+")]
 ```{r}
 tidytof_example_data("phenograph")
 #> [1] "/Library/Frameworks/R.framework/Versions/4.3-x86_64/Resources/library/tidytof/extdata/phenograph"
+#> 
+data("phenograph_data")
 ```
 
 ```{r}
@@ -231,15 +233,17 @@ adapt <- adapt |>
     rename_with(str_to_lower)
 
 
-# adapt_pos2 <- adapt_pos |> 
+# adapt_pos2 <- adapt_pos |>
 #     separate(sample_id, into = c("study_id", "patient_id", "visit", "date", "panel", "drop", "source"), sep = "_", extra = "drop", remove = F) %>%
-#     select(-drop) |> 
+#     select(-drop) |>
 #     unite("sample_id", study_id:population, remove = F)
 
-# adapt_pos3 <- adapt_pos |> 
+# adapt_pos3 <- adapt |>
 #     separate(sample_id, into = c("id", "visit"), sep = "V", remove = F)
 
 class(adapt)
+
+
 
 ```
 
@@ -248,7 +252,62 @@ class(adapt)
 ```{r}
 
 
+phenograph_clusters <-
+    phenograph_data |>
+    tof_preprocess() |>
+    tof_cluster(method = "flowsom", cluster_cols = contains("cd"))
 
+
+phenograph_clusters <-
+    phenograph_clusters |>
+    tof_cluster(method = "phenograph", cluster_cols = contains("cd"))
+```
+
+```{r}
+
+phenograph_clusters |>
+    # downsample
+    tof_downsample(
+        method = "constant",
+        group_cols = .phenograph_cluster,
+        num_cells = 200
+    ) |>
+    # count the number of downsampled cells in each cluster
+   group_by(.phenograph_cluster) |> 
+    summarise(n = n())
+
+
+
+```
+
+```{r}
+# perform the dimensionality reduction
+phenograph_tsne <-
+    phenograph_clusters |>
+    tof_reduce_dimensions(method = "tsne")
+
+# select only the tsne embedding columns using a tidyselect helper (contains)
+phenograph_tsne |>
+    select(contains("tsne")) |>
+    head()
+#> # A tibble: 6 × 2
+#>   .tsne1 .tsne2
+#>    <dbl>  <dbl>
+#> 1  -8.41   17.2
+#> 2   1.91   13.6
+#> 3  23.9    20.1
+#> 4   4.79   22.3
+#> 5  -4.99   22.4
+#> 6  11.0    20.2
+```
+
+```{r}
+# plot the tsne embeddings using color to distinguish between clusters
+phenograph_tsne |>
+    ggplot(aes(x = .tsne1, y = .tsne2, color = phenograph_cluster)) +
+    geom_point() +
+    theme_bw() +
+    labs(fill = NULL)
 ```
 
 ```{r}
@@ -335,8 +394,8 @@ adapt |>
 adapt_seurat <- adapt |> 
     as_seurat()
 
-adapt_seurat <- adapt_seurat |> 
-    FindVariableFeatures()
+# adapt_seurat <- adapt_seurat |> 
+#     FindVariableFeatures()
 
 pbmc_small <- pbmc_small
 
@@ -545,34 +604,34 @@ adapt_vars <- rownames(adapt_seurat)
 ```{r}
 
 
-pData(fcsTrans)$sample_id <- factor(pData(fcsTrans)$sample_id, levels = pData(fcsTrans)$sample_id)
-
-sample_ids <- rep(pData(fcsTrans)$sample_id, fsApply(fcsTrans, nrow))
-
-inds <- split(1:length(sample_ids), sample_ids)
-
-table <- table(sample_ids)
+# pData(fcsTrans)$sample_id <- factor(pData(fcsTrans)$sample_id, levels = pData(fcsTrans)$sample_id)
+# 
+# sample_ids <- rep(pData(fcsTrans)$sample_id, fsApply(fcsTrans, nrow))
+# 
+# inds <- split(1:length(sample_ids), sample_ids)
+# 
+# table <- table(sample_ids)
 
 
 
 # downsample equal number
 
 
-eventable <- setNames(rep(min(table), length(table)), names(table))
-
-tsne_ncells <- eventable
-
-
-
-
-down_inds <- lapply(names(inds), function(x){
-s <- sample(inds[[x]], tsne_ncells[x], replace = FALSE)
-})
-
-down_inds <- unlist(down_inds)
-
-
-Obj_fcs_down <- subset(Obj_fcs, cells = down_inds)
+# eventable <- setNames(rep(min(table), length(table)), names(table))
+# 
+# tsne_ncells <- eventable
+# 
+# 
+# 
+# 
+# down_inds <- lapply(names(inds), function(x){
+# s <- sample(inds[[x]], tsne_ncells[x], replace = FALSE)
+# })
+# 
+# down_inds <- unlist(down_inds)
+# 
+# 
+# Obj_fcs_down <- subset(Obj_fcs, cells = down_inds)
 
 # Obj_fcs_down <- Obj_fcs_down %>% 
 #   RunUMAP(dims = 1:13, verbose = TRUE) %>% 
