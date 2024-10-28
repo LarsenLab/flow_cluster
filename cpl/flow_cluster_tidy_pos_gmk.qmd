@@ -1,0 +1,737 @@
+---
+title: "flow_cluster"
+format: html
+editor: visual
+---
+
+Step1: Reading .fcs files using read.flowSet function from flowCore R package
+
+Step2: Using Arcsinh transformation to normalize the fcs files. Read more \[<https://support.cytobank.org/hc/en-us/articles/206148057-About-the-Arcsinh-transform>\]
+
+Step3: Create a Seurat Object using normalized counts from .fcs files
+
+Step4: Run Dimensionality reduction, clustering and then visualize cells
+
+Step5: Integrate Seurat objects to understand similarities and differences among cell-types learnt from each .fcs file
+
+[mojaveazure/seurat-disk: Interfaces for HDF5-based Single Cell File Formats (github.com)](https://github.com/mojaveazure/seurat-disk)
+
+### Additional resources
+
+<https://github.com/keyes-timothy/tidytof>
+
+<https://stemangiola.github.io/tidyseurat/>
+
+# library
+
+```{r}
+# 
+# if (!require("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+#BiocManager::install(version = "3.19")
+#BiocManager::install("HDCytoData")
+library(HDCytoData)
+#BiocManager::install(c("flowCore","ncdfFlow","flowWorkspace","Seurat"))
+library(flowCore)
+library(ncdfFlow)
+library(flowWorkspace)
+library(Seurat)
+library(tidytof)
+# if (!require(devtools)) install.packages("devtools")
+# BiocManager::install("keyes-timothy/tidyFlowCore")
+library(tidyFlowCore)
+library(readxl)
+library(cowplot)
+library(ggplot2)
+library(stringr)
+# remotes::install_github("mojaveazure/seurat-disk")
+
+library(RColorBrewer)
+library(pheatmap)
+library(ggpubr)
+library(ggsignif)
+library(Polychrome)
+library(gridExtra)
+
+
+
+library(tidyverse)
+library(janitor)
+library(reshape2)
+library(matrixStats)
+library(rstatix)
+library(here)
+
+
+source(here("source_func.R"))
+
+# aesthetics
+
+library(showtext)
+library(sysfonts)
+font_add("Avenir", "~/Library/Fonts/Avenir.ttf") # path to your Avenir.ttf file
+# download Avenir-Book.ttf from https://github.com/platanus/fonts/blob/master/Avenir/Avenir-Book.ttf
+# rename it as "Avenir.ttf" & put it under "/Users/weiwen_zhang/Library/Fonts"
+
+
+
+
+```
+
+```{r}
+# if (!require(devtools)) install.packages("devtools")
+# devtools::install_github("keyes-timothy/tidytof")
+
+library(tidytof)
+```
+
+```{r}
+# if (!require(devtools)) install.packages("devtools")
+# if (!requireNamespace("BiocManager", quietly = TRUE)) {
+#     install.packages("BiocManager")
+# }
+# 
+# 
+#BiocManager::install("tidyseurat")
+# BiocManager::install("keyes-timothy/tidyFlowCore")
+library(tidyFlowCore)
+library(tidyseurat)
+```
+
+### Theme
+
+```{r}
+# initialize showtext
+showtext_auto()
+
+size = 10
+tmp_theme = theme(
+    
+    text = element_text(size = size, family = "Avenir"),
+    # y
+    axis.title.y = element_text(size = size),
+    axis.text.y = element_text(size = size),
+    axis.ticks.y = element_line(size = 0.2, linetype = "solid", colour = "black"),
+    axis.line.y = element_line(size = 0.4, linetype = "solid", colour = "black"),
+    
+    # x
+    axis.title.x = element_text(size = size),
+    axis.text.x = element_text(size = size),
+    axis.ticks.x = element_line(size = 0.2, linetype = "solid", colour = "black"),
+    axis.line.x = element_line(size = 0.4, linetype = "solid", colour = "black"),
+    
+    # panel
+    panel.grid = element_blank(),  # remove background grid
+    panel.grid.major = element_blank(),  # remove major grid lines
+    panel.grid.minor = element_blank(),  # remove minor grid lines
+    panel.border = element_blank(),  # remove panel borders
+    panel.background = element_blank(),
+    
+    # facet
+    strip.background = element_rect(colour = "gray", fill = "white", linewidth = 0.5, linetype = "solid"), 
+    aspect.ratio = 1
+  )
+```
+
+# read in FACS files
+
+```{r}
+
+
+input_dir = here("raw/ITN089ST_adapt")
+fcs_files <- list.files(input_dir, pattern = ".fcs", full.names = TRUE)
+# fcs_files <- fcs_files[str_detect(fcs_files, "CD19\\+")]
+
+
+fcs_set = read.ncdfFlowSet(fcs_files, emptyValue = FALSE) 
+
+fcs_set |> 
+    class()
+```
+
+#### Reading data with `tof_read_data`
+
+```{r}
+library(tidyFlowCore)
+
+tof_tbl_numeric <- tof_read_data(fcs_files) 
+
+# %>% select(where(is.numeric))
+
+fcs_data <- tof_tbl_numeric |>
+    mutate(sample_id = str_remove(file_name, "\\.fcs")) |> 
+    mutate(sample_id = str_remove(sample_id, "export_"))  |> 
+    mutate(population = str_extract(sample_id, "CD19."))  |> 
+    mutate(time_point = str_extract(file_name, "V\\w+")) |> 
+    mutate(visit = str_extract(time_point, "V.+(?=_)"))  |> 
+    rename_with(~ str_remove(., "\\|.+")) |> 
+    rename_with(~ str_replace(., "-", "_")) |> 
+    rename_with(str_to_lower) |> 
+    separate(sample_id, into = c("study_id", "patient_id", "visit", "date", "panel", "drop", "source"), sep = "_", extra = "drop", remove = F) %>%
+    select(-drop) |> 
+    unite("sample_id", study_id:population, remove = F) |> 
+tidyFlowCore::as_tof_tbl(.,                  include_metadata=TRUE)  |> 
+        clean_names()
+
+
+seurat_obj <- as_seurat(fcs_data)
+
+
+
+
+```
+
+```{r}
+expr_matrix <- as.matrix(fcs_data)
+
+seurat_obj <- CreateSeuratObject(counts = expr_matrix)
+
+expr_matrix_1 <- crowbar::to_sparse_matrix(expr_matrix)
+
+library(Matrix)
+
+tof_tbl_numeric <- fcs_data %>% select(where(is.numeric))
+
+dgCMatrix_obj <- as(as.matrix(tof_tbl_numeric), "dgCMatrix") 
+
+seurat_obj <- CreateSeuratObject(counts = dgCMatrix_obj)
+
+counts_df <- as_tibble(as.data.frame(as.matrix(seurat_obj@assays$RNA@layers$counts)), rownames = "gene")
+
+# Extract metadata and convert to tibble
+metadata_tbl <- as_tibble(seurat_obj@meta.data, rownames = "cell")
+
+# If you want to join counts with metadata (long format), pivot the counts data
+# Here’s an example of merging counts with metadata
+tidy_counts <- counts_df %>%
+  pivot_longer(-gene, names_to = "cell", values_to = "expression") %>%
+  inner_join(metadata_tbl, by = "cell")
+```
+
+```{r}
+tidytof_example_data("phenograph")
+#> [1] "/Library/Frameworks/R.framework/Versions/4.3-x86_64/Resources/library/tidytof/extdata/phenograph"
+```
+
+```{r}
+phenograph <-
+    tidytof_example_data("phenograph") |>
+    tof_read_data() |> 
+    clean_names()
+
+phenograph |>
+    class()
+
+```
+
+### Our data tidytof
+
+```{r}
+adapt_pos <-
+    tof_read_data(input_dir)
+
+adapt_pos_seurat <- adapt_pos |> 
+    as_seurat()
+
+class(adapt_pos)
+class(adapt_pos_seurat)
+```
+
+```{r}
+# before preprocessing
+phenograph |>
+    select(`CD45|Sm154`, `CD34|Nd148`, `CD38|Er167`) |>
+    head()
+
+# before preprocessing
+adapt_pos |>
+    select(`CD19|FJComp-BUV C-A`,
+           `CD38|FJComp-Blue B-A`) |>
+    head()
+```
+
+Transform Cytof cofactor 5, Flow cytometry cofactor 150
+
+```{r}
+# perform preprocessing
+phenograph <-
+    phenograph |>
+    tof_preprocess()
+
+# inspect new values
+phenograph |>
+    select(`CD45|Sm154`, `CD34|Nd148`, `CD38|Er167`) |>
+    head()
+
+# perform preprocessing
+adapt_pos <-
+    adapt_pos |>
+    tof_preprocess(transform_fun = function(x) asinh(x/150))
+
+
+# inspect new values
+adapt_pos |>
+    select(`CD19|FJComp-BUV C-A`,
+           `CD38|FJComp-Blue B-A`) |>
+    head()
+
+class(adapt_pos)
+```
+
+```{r}
+phenograph <-
+    phenograph |>
+    # mutate the input tof_tbl
+    mutate(
+        PhenoGraph = as.character(PhenoGraph),
+        Condition = as.character(Condition)
+    )
+
+phenograph |>
+    # use dplyr's select method to show that the columns have been changed
+    select(where(is.character)) |>
+    head()
+
+class(phenograph)
+```
+
+### Create new variables
+
+```{r}
+adapt_files <- adapt_pos |>
+    select(file_name) |> 
+    distinct()
+
+adapt_pos <- adapt_pos |> 
+    mutate(sample_id = str_remove(file_name, "\\.fcs")) |> 
+    mutate(sample_id = str_remove(sample_id, "export_"))  |> 
+    mutate(population = str_extract(sample_id, "CD19."))  |> 
+    mutate(time_point = str_extract(file_name, "V\\w+")) |> 
+    mutate(visit = str_extract(time_point, "V.+(?=_)"))  |> 
+    rename_with(~ str_remove(., "\\|.+")) |> 
+    rename_with(~ str_replace(., "-", "_")) |> 
+    rename_with(str_to_lower)
+
+
+adapt_pos2 <- adapt_pos |> 
+    separate(sample_id, into = c("study_id", "patient_id", "visit", "date", "panel", "drop", "source"), sep = "_", extra = "drop", remove = F) %>%
+    select(-drop) |> 
+    unite("sample_id", study_id:population, remove = F)
+
+class(adapt_pos)
+
+
+adapt_pos |>
+    # use dplyr's select method to show that the columns have been changed
+    select(where(is.character)) |>
+    head()
+```
+
+### metadata
+
+```{r}
+
+
+
+class(adapt_pos2)
+
+class(adapt_pos)
+
+```
+
+```{r}
+data(phenograph_data)
+
+# phenograph_data |>
+#     count(phenograph_cluster)
+
+phenograph_data |>
+    group_by(phenograph_cluster) |> 
+    summarise(n = n())
+
+```
+
+\# Setting bins creates evenly spaced contours in the range of the data
+
+v + geom_contour(bins = 3)
+
+v + geom_contour(bins = 5)
+
+\# }
+
+```{r}
+phenograph_data |>
+    # preprocess all numeric columns in the dataset
+    tof_preprocess(undo_noise = FALSE) |>
+    # make a scatterplot
+    ggplot(aes(x = cd34, y = cd38)) +
+    geom_point(alpha = 0.5) +
+    scale_x_continuous(limits = c(NA, 1.5)) +
+    scale_y_continuous(limits = c(NA, 4)) +
+    theme_bw() 
+
+adapt_pos |>
+    # preprocess all numeric columns in the dataset
+    tof_preprocess(undo_noise = FALSE) |>
+    # make a scatterplot
+    ggplot(aes(x = cd38, y = cd138)) +
+    # geom_point(alpha = 0.5) +
+    # geom_contour() +
+    geom_density_2d(bins = 10, colour = "blue") +
+    # scale_x_continuous(limits = c(NA, 1.5)) +
+    # scale_y_continuous(limits = c(NA, 4)) +
+    theme_bw() + 
+    facet_wrap(vars(visit, population))
+
+
+adapt_pos |>
+    # preprocess all numeric columns in the dataset
+    tof_preprocess(undo_noise = FALSE) |>
+    # make a scatterplot
+    ggplot(aes(x = cd19, y = cd38)) +
+    # geom_point(alpha = 0.5) +
+    # geom_contour() +
+
+    geom_density_2d_filled(bins = 8,
+                           alpha = 0.5,
+                           colour = "blue") +
+        geom_density_2d(bins = 8) +
+    # scale_x_continuous(limits = c(NA, 1.5)) +
+    # scale_y_continuous(limits = c(NA, 4)) +
+    theme_bw()
+
+adapt_pos |>
+    # preprocess all numeric columns in the dataset
+    tof_preprocess(undo_noise = FALSE) |>
+    # make a scatterplot
+    ggplot(aes(x = cd19, y = cd38)) +
+    # geom_point(alpha = 0.5) +
+    # geom_contour() +
+    geom_density_2d_filled(bins = 8, colour = "blue") +
+    # scale_x_continuous(limits = c(NA, 1.5)) +
+    # scale_y_continuous(limits = c(NA, 4)) +
+    theme_bw()
+
+
+```
+
+# change channel name to marker name
+
+```{r}
+
+
+name.marker <- as.vector(ifelse(!(is.na(pData(parameters(fcs_set[[1]]))$desc)),
+             pData(parameters(fcs_set[[1]]))$desc,colnames(fcs_set[[1]])))
+
+
+
+colnames(fcs_set) <- name.marker
+
+
+
+
+```
+
+# downsample
+
+```{r}
+
+fsApply(fcs_set, nrow)
+
+
+# fcs_set = as.flowSet(fcs_set)
+# 
+# sampling.ceiling <- 10000
+# 
+# set.seed(0)
+# 
+# fcs_set <- fsApply(fcs_set, function(ff) {
+#   idx <- sample.int(nrow(ff), min(sampling.ceiling, nrow(ff)))
+#   ff[idx,]  
+# })
+# 
+# fsApply(fcs_set, nrow)
+
+```
+
+# metadata
+
+```{r}
+pData(fcs_set) = pData(fcs_set) %>%
+    mutate(sample_id = gsub("\\.fcs", "", name)) %>%
+    mutate(sample_id = gsub("export_", "", sample_id)) %>%
+    mutate(population = str_extract(sample_id, "CD19.")) %>%
+    separate(sample_id, into = c("study_id", "patient_id", "visit", "date", "panel", "drop", "source"), sep = "_", extra = "drop", remove = T) %>%
+    select(-drop) %>%
+    unite("sample_id", study_id:population, remove = F)
+
+```
+
+# transform
+
+```{r}
+
+marker_vec = c("IgD", "CD38", "CD20", "CXCR3", "IgM", "CD21", "CD34", "CD24", "CD27", "CXCR4", "CXCR5", "CD138", "CD11c","BCMA")
+
+
+fcsTrans <- fsApply(fcs_set, function(x, cofactor = 150){
+  expr <- exprs(x)
+  expr <- asinh(expr[, marker_vec] / cofactor)
+  exprs(x) <- expr
+  x}) 
+
+
+
+```
+
+# cell count table
+
+```{r}
+
+
+sample_ids <- rep(pData(fcsTrans)$sample_id, fsApply(fcsTrans, nrow))
+
+cell_table <- table(sample_ids)
+
+cell_table
+
+```
+
+# metadata for Seurat object
+
+```{r}
+
+expr <- fsApply(fcsTrans, exprs)
+dim(expr)
+
+
+meta_seurat = data.frame(matrix(nrow = dim(expr)[1], ncol = ncol(pData(fcsTrans))))
+colnames(meta_seurat) = colnames(pData(fcsTrans))
+
+for (i in colnames(pData(fcsTrans))) {
+pull_column = pData(fcsTrans) %>%
+  dplyr::pull(!!sym(i))
+pull_column = factor(pull_column)
+meta_seurat[[i]] = rep(pull_column, fsApply(fcsTrans, nrow))
+  
+}
+
+
+```
+
+# create Seurat Object
+
+```{r}
+
+expr_fcs <- t(expr)
+
+
+Cells <- paste0("sample_", c(1:ncol(expr_fcs)))
+SampleName <- rep("sample", ncol(expr_fcs))
+TimePoint <- rep("time", ncol(expr_fcs))
+
+colnames(expr_fcs) <- Cells
+
+metadata <- cbind(Cells, SampleName, TimePoint, meta_seurat)
+
+metadata <- data.frame(metadata)
+
+Obj_fcs <- CreateSeuratObject(expr_fcs)
+
+CellsMeta = Obj_fcs@meta.data
+
+
+Obj_fcs <- AddMetaData(Obj_fcs, cbind(CellsMeta, metadata))
+
+
+```
+
+# feature selection / dimension reduction / clustering
+
+```{r}
+VariableFeatures(Obj_fcs) <- rownames(Obj_fcs)
+
+Obj_fcs@assays$RNA$data = Obj_fcs@assays$RNA$counts
+
+
+Obj_fcs <- Obj_fcs %>% 
+    ScaleData() %>% 
+    RunPCA(verbose = TRUE) %>% 
+    FindNeighbors(dims = 1:13, verbose = TRUE) %>% 
+    FindClusters(verbose = TRUE, resolution = 0.5)
+```
+
+### Seurat - tidytof
+
+```{r}
+adapt_pos_seurat <- adapt_pos |> 
+    as_seurat()
+
+adapt_pos |>
+    class()
+
+adapt_pos_seurat |>
+    class()
+```
+
+```{r}
+VariableFeatures(Obj_fcs) <- rownames(Obj_fcs)
+
+Obj_fcs@assays$RNA$data = Obj_fcs@assays$RNA$counts
+
+
+Obj_fcs <- Obj_fcs %>% 
+    ScaleData() %>% 
+    RunPCA(verbose = TRUE) %>% 
+    FindNeighbors(dims = 1:13, verbose = TRUE) %>% 
+    FindClusters(verbose = TRUE, resolution = 0.5)
+```
+
+# down-sample for RunUMAP & RunTSNE
+
+```{r}
+
+
+pData(fcsTrans)$sample_id <- factor(pData(fcsTrans)$sample_id, levels = pData(fcsTrans)$sample_id)
+
+sample_ids <- rep(pData(fcsTrans)$sample_id, fsApply(fcsTrans, nrow))
+
+inds <- split(1:length(sample_ids), sample_ids)
+
+table <- table(sample_ids)
+
+
+
+# downsample equal number
+
+
+eventable <- setNames(rep(min(table), length(table)), names(table))
+
+
+
+
+
+tsne_ncells <- eventable
+
+
+
+
+down_inds <- lapply(names(inds), function(x){
+s <- sample(inds[[x]], tsne_ncells[x], replace = FALSE)
+})
+
+down_inds <- unlist(down_inds)
+
+
+Obj_fcs_down <- subset(Obj_fcs, cells = down_inds)
+
+Obj_fcs_down <- Obj_fcs_down %>% 
+  RunUMAP(dims = 1:13, verbose = TRUE) %>% 
+  RunTSNE(dims = 1:13, verbose = TRUE)
+
+DimPlot(Obj_fcs_down, reduction = "umap", pt.size = 1)
+DimPlot(Obj_fcs_down, reduction = "tsne", pt.size = 1)
+
+
+```
+
+# ggplot
+
+```{r}
+
+
+meta_data = Obj_fcs_down[[]]
+umap_cordinates = as.data.frame(Obj_fcs_down@reductions$umap@cell.embeddings)
+tsne_cordinates = as.data.frame(Obj_fcs_down@reductions$tsne@cell.embeddings)
+
+df = cbind(meta_data, umap_cordinates, tsne_cordinates)
+
+cluster_n = df %>% dplyr::distinct(seurat_clusters) %>% nrow()
+
+
+if(cluster_n > 27) {
+# if number of cluster exceed 27 use this code
+color_clusters = createPalette(cluster_n, c("#00ffff", "#ff00ff", "#ffff00"))
+color_clusters = unname(color_clusters)
+names(color_clusters) = c(0:(cluster_n-1)) } else {
+
+
+# if number of cluster <= 27 use this code
+color_clusters = c(brewer.pal(9, "Set2"), brewer.pal(9, "Set1"), brewer.pal(9, "Set3"))
+color_clusters = color_clusters[c(1:(cluster_n))]
+names(color_clusters) = c(0:(cluster_n-1))
+    }
+
+
+
+ggplot(df,  aes(x = tSNE_1, y = tSNE_2, color = seurat_clusters)) +
+geom_point(size = 1, alpha = 1, shape = 16, stroke = 0) +
+scale_color_manual(values = color_clusters) + 
+  facet_wrap(vars(population)) + 
+  guides(color = guide_legend(title = "Cluster", override.aes = list(size = 4), ncol = 2)) + 
+  tmp_theme + 
+  theme(aspect.ratio = 1,
+        legend.position = "right")
+
+ggsave("output/pos/seurat_clusters.pdf")
+
+
+ggplot(df,  aes(x = tSNE_1, y = tSNE_2, color = seurat_clusters)) +
+geom_point(size = 1, alpha = 1, shape = 16, stroke = 0) +
+scale_color_manual(values = color_clusters) + 
+  facet_grid(population ~ visit) + 
+  guides(color = guide_legend(title = "Cluster", override.aes = list(size = 4), ncol = 2)) + 
+  tmp_theme + 
+  theme(aspect.ratio = 1,
+        legend.position = "right")
+
+ggsave("output/pos/seurat_clusters_by_visit.pdf")
+
+
+
+
+
+
+
+```
+
+# marker expression
+
+```{r fig.width=12, fig.height=4}
+
+
+
+df2 = as.matrix(Obj_fcs_down@assays$RNA$scale.data)
+df2 = as.data.frame(t(df2))
+
+df2 = cbind(df2, umap_cordinates, tsne_cordinates, meta_data)
+colnames(df2) = gsub("-", "_", colnames(df2))
+marker_vec2 = gsub("-", "_", marker_vec)
+
+
+plots = list()
+for (i in 1:length(marker_vec2)) {
+
+  
+plots[[i]] = ggplot(df2,  aes_string(x = "tSNE_1", y = "tSNE_2", color = marker_vec2[i])) +
+geom_point(size = 0.2) +
+ggtitle(marker_vec2[i]) + 
+scale_color_gradientn(marker_vec2[i], values = c(1, 0), na.value = "darkred",
+colours = colorRampPalette((brewer.pal(n = 11, name = "Spectral")))(50)) +
+  tmp_theme + 
+  theme(aspect.ratio = 1) + 
+  guides(color = FALSE)
+
+}
+
+pdf("output/pos/marker_expression.pdf", width = 12, height = 6)
+
+grid.arrange(grobs = plots, nrow = 2)
+
+dev.off
+
+
+
+  
+
+```
