@@ -1,20 +1,25 @@
 ---
-title: "flow_cluster"
+title: "Flow Cytometry Data Analysis Workflow"
+author: "Geeta Karadkhele & Chris Larsen"
 format: html
 editor: visual
 ---
 
-Step1: Reading .fcs files using read.flowSet function from flowCore R package
+###Steps
 
-Step2: Using Arcsinh transformation to normalize the fcs files. Read more \[<https://support.cytobank.org/hc/en-us/articles/206148057-About-the-Arcsinh-transform>\]
+Step 1: Read .fcs Files
+Load .fcs files using read.flowSet() from the flowCore package to handle flow cytometry data.
 
-Step3: Create a Seurat Object using normalized counts from .fcs files
+Step 2: Arcsinh Transformation for Normalization.Normalize the data using an Arcsinh transformation, a common approach for cytometry data. \[<https://support.cytobank.org/hc/en-us/articles/206148057-About-the-Arcsinh-transform>\]
 
-Step4: Run Dimensionality reduction, clustering and then visualize cells
+Step 3: Create a Seurat Object
+Using the normalized counts, create a Seurat object to prepare for downstream analysis, including clustering and dimensionality reduction.
 
-Step5: Integrate Seurat objects to understand similarities and differences among cell-types learnt from each .fcs file
+Step 4: Dimensionality Reduction, Clustering, and Visualization
+Run dimensionality reduction methods (e.g., t-SNE or UMAP) and clustering algorithms to visualize the cell data.
 
-[mojaveazure/seurat-disk: Interfaces for HDF5-based Single Cell File Formats (github.com)](https://github.com/mojaveazure/seurat-disk)
+Step 5: Integrate Seurat Objects
+Integrate multiple Seurat objects to understand similarities and differences among cell types. Additional resources for file format handling:[mojaveazure/seurat-disk: Interfaces for HDF5-based Single Cell File Formats (github.com)](https://github.com/mojaveazure/seurat-disk)
 
 ### Additional resources
 
@@ -22,9 +27,9 @@ Step5: Integrate Seurat objects to understand similarities and differences among
 
 <https://stemangiola.github.io/tidyseurat/>
 
-# library
+### library
 
-```{r}
+```{r include=FALSE, warning=FALSE}
 # 
 # if (!require("BiocManager", quietly = TRUE))
 #     install.packages("BiocManager")
@@ -37,6 +42,9 @@ library(ncdfFlow)
 library(flowWorkspace)
 library(Seurat)
 library(tidytof)
+library(tidyFlowCore)
+library(tidyseurat)
+library(FlowSOM)
 # if (!require(devtools)) install.packages("devtools")
 # BiocManager::install("keyes-timothy/tidyFlowCore")
 library(tidyFlowCore)
@@ -61,6 +69,7 @@ library(reshape2)
 library(matrixStats)
 library(rstatix)
 library(here)
+library(embed)
 
 
 source(here("source_func.R"))
@@ -82,7 +91,7 @@ font_add("Avenir", "~/Library/Fonts/Avenir.ttf") # path to your Avenir.ttf file
 # if (!require(devtools)) install.packages("devtools")
 # devtools::install_github("keyes-timothy/tidytof")
 
-library(tidytof)
+
 ```
 
 ```{r}
@@ -94,13 +103,12 @@ library(tidytof)
 # 
 #BiocManager::install("tidyseurat")
 # BiocManager::install("keyes-timothy/tidyFlowCore")
-library(tidyFlowCore)
-library(tidyseurat)
+
 ```
 
-### Theme
+### Font and Theme Settings
 
-```{r}
+```{r include=FALSE, warning=FALSE}
 # initialize showtext
 showtext_auto()
 
@@ -133,115 +141,160 @@ tmp_theme = theme(
   )
 ```
 
-# read in FACS files
+### Workflow
 
-```{r}
+#### Loading and Preprocessing Data
+##### Step 1: Load FCS Files
 
-
-input_dir = here("raw/ITN089ST_adapt")
+```{r include=FALSE, warning=FALSE}
+input_dir <- here("raw/ITN089ST_adapt")
 fcs_files <- list.files(input_dir, pattern = ".fcs", full.names = TRUE)
-# fcs_files <- fcs_files[str_detect(fcs_files, "CD19\\+")]
-
-
-fcs_set = read.ncdfFlowSet(fcs_files, emptyValue = FALSE) 
-
-fcs_set |> 
-    class()
-
-bcr_flowset = read.ncdfFlowSet(fcs_files, emptyValue = FALSE) 
-
-# asinh_transformation <- flowCore::arcsinhTransform(a = 0, b = 1/5, c = 0)
-# transformation_list <- 
-#   flowCore::transformList(
-#     colnames(bcr_flowset), 
-#     asinh_transformation
-#   )
-# 
-# transformed_bcr_flowset <- flowCore::transform(bcr_flowset, transformation_list)
-
-
-# # extract all expression matrices from our flowSet 
-# combined_matrix <- flowCore::fsApply(bcr_flowset, exprs)
-# 
-# # take out the concatenated population_id column 
-# combined_population_id <- combined_matrix[, 'population_id']
-# 
-# # perform the calculation
-# table(combined_population_id)
-# #> combined_population_id
+fcs_files <- fcs_files[str_detect(fcs_files, "CD19\\+")]
 ```
 
-#### Reading data with `tof_read_data`
+##### Step 2: Read and Tidy FCS Data with tidytof
 
+```{r include=FALSE, warning=FALSE}
+adapt <- tof_read_data(input_dir) |> 
+    clean_names() |> 
+    mutate(across(where(is.numeric), ~ asinh(. / 150)))
+
+adapt <- tof_preprocess(adapt, transform_fun = scale)  
+```
+
+##### Step 3: Create Sample Metadata Variables
 ```{r}
-bcr_flowset <- HDCytoData::Bodenmiller_BCR_XL_flowSet()
-
-library(tidyFlowCore)
-
-tof_tbl_numeric <- tof_read_data(fcs_files) 
-
-# %>% select(where(is.numeric))
-
-transformed_fcs_flowset <- 
-  tof_tbl_numeric |>
-  dplyr::mutate(across(-ends_with("_name"), \(.x) asinh(.x / 5)))
-
-fcs_data <- transformed_fcs_flowset |>
+adapt <- adapt |> 
     mutate(sample_id = str_remove(file_name, "\\.fcs")) |> 
     mutate(sample_id = str_remove(sample_id, "export_"))  |> 
-    mutate(population_id = str_extract(sample_id, "CD19.|CD45."))  |> 
-    mutate(time_point_id = str_extract(file_name, "V\\w+")) |> 
-    mutate(visit_sub_id = str_extract(time_point_id, "V.+(?=_)"))  |> 
+    mutate(population = str_extract(sample_id, "CD19."))  |> 
+   mutate(sample_id = str_remove(sample_id, "_B_cell Panel_BM_CD19-")) |> 
+    mutate(time_point = str_extract(file_name, "V\\w+")) |> 
+    mutate(visit = str_extract(time_point, "V\\w{0,2}(?=_)"))  |> 
+    rename_with(~ str_remove(., "_fj_comp_.+")) |>
     rename_with(~ str_remove(., "\\|.+")) |> 
     rename_with(~ str_replace(., "-", "_")) |> 
-    rename_with(str_to_lower) |> 
-    separate(sample_id, into = c("study_id", "patient_id", "visit_id", "date_id", "panel_id", "drop", "source_id"), sep = "_", extra = "drop", remove = F) %>%
-    select(-drop) |> 
-    unite("sample_id", study_id:population_id, remove = F) |> 
-tidyFlowCore::as_tof_tbl(.,                  include_metadata=TRUE)  |> 
-        clean_names()
-
-fcs_data |> 
-  # use the .tidyFlowCore_identifier pronoun to access the name of 
-  # each experiment in the flowSet 
-  dplyr::count(sample_id, population_id)
-
-seurat_obj <- as_seurat(fcs_data)
-
-
-
-
+    rename_with(str_to_lower)
 ```
+
+#### Clustering and Dimensionality Reduction
+##### Step 4: Cluster Cells 
 
 ```{r}
-tof_cluster(tof_tibble = fcs_data, method = "kmeans")
+clust_cols <- c("cd19", "cd20", "cd38", "cxcr3", "ig_m", "ig_d", "cd21", "cd34", "cd24", "cd27", "cxcr4", "cxcr5", "cd138", "cd11c", "bcma")
 
-clust <- c("cd19", "cd20", "cxcr3", "cd21", "cd38", "cd138" )
+adapt_clusters_cd19_pos <- adapt |> filter(population == "CD19+") |>
+    tof_cluster(method = "flowsom", cluster_cols = clust_cols, num_metaclusters = 8)
+adapt_clusters_cd19_neg <- adapt |> filter(population == "CD19-") |>
+    tof_cluster(method = "flowsom", cluster_cols = clust_cols, num_metaclusters = 8)
 
-#BiocManager::install("FlowSOM")
-library(FlowSOM)
+```
 
-flowsom_clust <- fcs_data |>
-    tof_preprocess() |>
-    tof_cluster(method = "flowsom",cluster_cols = clust, 
-                num_metaclusters = 15,
-                augment = T) 
+##### Step 5: Downsample and Reduce Dimensions (t-SNE)
 
-flow_tsne <-
-   flowsom_clust |>
+```{r}
+adapt_clusters_cd19_pos_tsne <- adapt_clusters_cd19_pos |>
+    tof_downsample(method = "constant", group_cols = visit, num_cells = 1000) |>
     tof_reduce_dimensions(method = "tsne")
 
-library(embed)
-flow_umap <-
-   flowsom_clust |>
-    tof_reduce_dimensions(method = "umap")
+adapt_clusters_cd19_neg_tsne <- adapt_clusters_cd19_neg |>
+    tof_downsample(method = "constant", group_cols = visit, num_cells = 1000) |>
+    tof_reduce_dimensions(method = "tsne")
+```
 
-flow_umap |>
-    mutate(.flowsom_metacluster = as.factor(.flowsom_metacluster)) |> 
-    slice_sample( n = 10000) |> 
-    ggplot(aes(x = .umap1, y = .umap2, color = .flowsom_metacluster, group=.flowsom_metacluster)) +
-    #geom_point(shape = 21) +
+### Visualization
+#### Plotting Clusters and Expression Levels
+
+```{r}
+adapt_clusters_cd19_pos_tsne |>
+    ggplot(aes(x = .tsne1, y = .tsne2, color = .flowsom_metacluster)) +
     geom_point() +
     theme_bw() +
-    labs(fill = NULL)
+    labs(fill = NULL)+ 
+scale_color_manual(values = colorRampPalette(brewer.pal(n = 11, name = "Spectral"))(length(unique(adapt_clusters_cd19_pos_tsne$.flowsom_metacluster)))) +
+  tmp_theme + 
+  theme(aspect.ratio = 1) + 
+  guides(color = FALSE)
+
+adapt_clusters_cd19_pos_tsne |>
+  ggplot(aes(x = .tsne1, y = .tsne2, color = as.factor(.flowsom_metacluster))) +  # Convert to factor if discrete
+  geom_point() +
+  theme_bw() +
+  labs(fill = NULL) +
+  facet_wrap(~ visit) +
+  scale_color_manual(values = colorRampPalette(brewer.pal(n = 12, name = "Spectral"))(length(unique(adapt_clusters_cd19_pos_tsne$.flowsom_metacluster)))) +
+  tmp_theme +
+  theme(aspect.ratio = 1)  + 
+  guides(color = "none")
+
+
+adapt_clusters_cd19_pos_tsne |>
+    ggplot(aes(x = .tsne1, y = .tsne2, color = cd38)) +
+    geom_point() +
+    theme_bw() +
+    labs(fill = NULL) +
+    facet_wrap(~ visit) + 
+scale_color_gradientn(values = c(1, 0), na.value = "darkred",
+colours = colorRampPalette((brewer.pal(n = 9, name = "Spectral")))(50)) +
+  tmp_theme + 
+  theme(aspect.ratio = 1) 
 ```
+
+
+##### Plot by Cluster with Labels
+
+```{r}
+clust_cols <- c("cd19", "cd20", "cd38", "cxcr3", "ig_m", "ig_d", "cd21", "cd34", 
+                "cd24", "cd27", "cxcr4", "cxcr5", "cd138", "cd11c", "bcma")
+
+adapt_clusters_long <- adapt_clusters_cd19_pos_tsne |>
+  select(cd19:bcma,.flowsom_metacluster:.tsne2,visit)|>
+  pivot_longer(cols=c(cd19:bcma),names_to = "marker", values_to = "expression")|> 
+    mutate(.flowsom_metacluster = as.factor(.flowsom_metacluster),
+           marker = as.factor(marker),
+           visit=as.factor(visit)) 
+    
+
+
+ggplot(adapt_clusters_long, aes(x = .tsne1, y = .tsne2, color = expression)) +
+  geom_point() +
+  theme_bw() +
+  scale_color_gradientn(values = c(1, 0), na.value = "darkred",
+colours = colorRampPalette((brewer.pal(n = 9, name = "Spectral")))(50)) +
+  facet_wrap(~ marker, scales = "free") +
+  labs(color = "Expression") +
+  theme(aspect.ratio = 0.5)
+
+
+```
+
+##### Expression by Marker 
+```{r}
+cluster_labels <- adapt_clusters_long |>
+  group_by(marker, .flowsom_metacluster) |>
+  summarise(
+    label_x = median(.tsne1, na.rm = TRUE),
+    label_y = median(.tsne2, na.rm = TRUE),
+    .groups = 'drop'
+  )
+
+
+ggplot(adapt_clusters_long, aes(x = .tsne1, y = .tsne2, color = .flowsom_metacluster)) +
+  geom_point(aes(alpha = expression)) +  
+  facet_wrap(~ marker, scales = "free") +
+  geom_text(
+    data = cluster_labels,
+    aes(x = label_x, y = label_y, label = .flowsom_metacluster),
+    color = "black",  
+    size = 3,
+    vjust = -0.5
+  ) +
+  theme_bw() +
+  scale_color_manual(values = colorRampPalette(brewer.pal(n = 12, name = "Set3"))(length(unique(adapt_clusters_long$.flowsom_metacluster)))) +
+  #scale_alpha_continuous(range = c(0.2, 1)) +  # Broaden alpha range for better brightness contrast
+  #labs(color = "Cluster", alpha = "Expression") +
+  theme(aspect.ratio = 0.50) +
+    guides(color = "none",
+           size="none")
+```
+
