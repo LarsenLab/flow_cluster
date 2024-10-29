@@ -287,12 +287,15 @@ adapt_clusters_cd19_pos <-
 
 adapt_clusters_cd19_neg <-
     adapt_cd19_neg |>
-    tof_cluster(method = "flowsom", cluster_cols = clust_cols_adapt)
-
+    tof_cluster(method = "flowsom", 
+                cluster_cols = clust_cols_adapt,
+                num_metaclusters = 8)
 
 adapt_clusters_cd19_neg <-
     adapt_cd19_neg |>
-    tof_cluster(method = "phenograph", cluster_cols = clust_cols_adapt)
+    tof_cluster(method = "phenograph", 
+                cluster_cols = clust_cols_adapt,
+                num_metaclusters = 8)
 ```
 
 ```{r}
