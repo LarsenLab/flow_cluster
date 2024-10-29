@@ -261,6 +261,27 @@ phenograph_clusters <-
 phenograph_clusters <-
     phenograph_clusters |>
     tof_cluster(method = "phenograph", cluster_cols = contains("cd"))
+
+
+```
+
+```{r}
+adapt <- adapt |> 
+    filter(population == "CD19+")
+```
+
+```{r}
+
+clust_cols_adapt <- wrapr::qc(cd19, cd20, cd38, cxcr3, ig_m, ig_d, cd21, cd34, cd24, cd27, cxcr4, cxcr5, cd138, cd11c, bcma)
+    
+adapt_clusters <-
+    adapt |>
+    tof_cluster(method = "flowsom", cluster_cols = clust_cols_adapt)
+
+
+adapt_clusters <-
+    adapt_clusters |>
+    tof_cluster(method = "phenograph", cluster_cols = clust_cols_adapt)
 ```
 
 ```{r}
@@ -290,15 +311,25 @@ phenograph_tsne <-
 phenograph_tsne |>
     select(contains("tsne")) |>
     head()
-#> # A tibble: 6 × 2
-#>   .tsne1 .tsne2
-#>    <dbl>  <dbl>
-#> 1  -8.41   17.2
-#> 2   1.91   13.6
-#> 3  23.9    20.1
-#> 4   4.79   22.3
-#> 5  -4.99   22.4
-#> 6  11.0    20.2
+
+
+adapt_down <- adapt_clusters |>
+    # downsample
+    tof_downsample(
+        method = "constant",
+        group_cols = visit,
+        # group_cols = .flowsom_metacluster,
+        # prop_cells = 0.25
+        num_cells = 1000
+    ) 
+
+adapt_tsne <-
+    adapt_clusters |>
+    tof_reduce_dimensions(method = "tsne")
+
+adapt_tsne <-
+    adapt_down |>
+    tof_reduce_dimensions(method = "tsne")
 ```
 
 ```{r}
@@ -308,6 +339,27 @@ phenograph_tsne |>
     geom_point() +
     theme_bw() +
     labs(fill = NULL)
+
+adapt_tsne |>
+    ggplot(aes(x = .tsne1, y = .tsne2, color = .flowsom_metacluster)) +
+    geom_point() +
+    theme_bw() +
+    labs(fill = NULL)
+
+
+adapt_tsne |>
+    ggplot(aes(x = .tsne1, y = .tsne2, color = .flowsom_metacluster)) +
+    geom_point() +
+    theme_bw() +
+    labs(fill = NULL) +
+    facet_wrap(~ visit)
+
+adapt_tsne |>
+    ggplot(aes(x = .tsne1, y = .tsne2, color = cd138)) +
+    geom_point() +
+    theme_bw() +
+    labs(fill = NULL) +
+    facet_wrap(~ visit)
 ```
 
 ```{r}
