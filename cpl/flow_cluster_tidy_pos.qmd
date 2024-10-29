@@ -185,7 +185,8 @@ phenograph |>
 
 # perform preprocessing
 adapt <- adapt |>
-    tof_preprocess(transform_fun = function(x) asinh(x/150))
+    tof_preprocess(transform_fun = function(x) asinh(x/150)) |> 
+    tof_preprocess(transform_fun = scale)
 
 
 # inspect new values
@@ -280,7 +281,9 @@ clust_cols_adapt <- wrapr::qc(cd19, cd20, cd38, cxcr3, ig_m, ig_d, cd21, cd34, c
     
 adapt_clusters_cd19_pos <-
     adapt_cd19_pos |>
-    tof_cluster(method = "flowsom", cluster_cols = clust_cols_adapt)
+    tof_cluster(method = "flowsom", 
+                cluster_cols = clust_cols_adapt,
+                num_metaclusters = 8)
 
 adapt_clusters_cd19_neg <-
     adapt_cd19_neg |>
