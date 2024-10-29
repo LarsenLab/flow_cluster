@@ -37,6 +37,9 @@ library(ncdfFlow)
 library(flowWorkspace)
 library(Seurat)
 library(tidytof)
+library(tidyFlowCore)
+library(tidyseurat)
+library(FlowSOM)
 # if (!require(devtools)) install.packages("devtools")
 # BiocManager::install("keyes-timothy/tidyFlowCore")
 library(tidyFlowCore)
@@ -61,6 +64,7 @@ library(reshape2)
 library(matrixStats)
 library(rstatix)
 library(here)
+library(embed)
 
 
 source(here("source_func.R"))
@@ -82,7 +86,7 @@ font_add("Avenir", "~/Library/Fonts/Avenir.ttf") # path to your Avenir.ttf file
 # if (!require(devtools)) install.packages("devtools")
 # devtools::install_github("keyes-timothy/tidytof")
 
-library(tidytof)
+
 ```
 
 ```{r}
@@ -94,8 +98,7 @@ library(tidytof)
 # 
 #BiocManager::install("tidyseurat")
 # BiocManager::install("keyes-timothy/tidyFlowCore")
-library(tidyFlowCore)
-library(tidyseurat)
+
 ```
 
 ### Theme
@@ -176,7 +179,7 @@ bcr_flowset = read.ncdfFlowSet(fcs_files, emptyValue = FALSE)
 ```{r}
 bcr_flowset <- HDCytoData::Bodenmiller_BCR_XL_flowSet()
 
-library(tidyFlowCore)
+
 
 tof_tbl_numeric <- tof_read_data(fcs_files) 
 
@@ -206,23 +209,84 @@ fcs_data |>
   # each experiment in the flowSet 
   dplyr::count(sample_id, population_id)
 
-seurat_obj <- as_seurat(fcs_data)
-
-
+# seurat_obj <- as_seurat(fcs_data)
 
 
 ```
 
 ```{r}
-tof_cluster(tof_tibble = fcs_data, method = "kmeans")
+meta_seurat_tidytf <- fcs_data
+    
+expr_fcs_tidytf <- t(fcs_data %>% 
+    dplyr::select(cd45, cd19:bcma) %>% 
+    as.matrix())
+
+Cells_tidytf <- paste0("sample_", c(1:ncol(expr_fcs_tidytf)))
+SampleName_tidytf <- rep("sample", ncol(expr_fcs_tidytf))
+TimePoint_tidytf <- rep("time", ncol(expr_fcs_tidytf))
+
+colnames(expr_fcs_tidytf) <- Cells_tidytf
+
+metadata_tidytf <- cbind(Cells_tidytf, SampleName_tidytf, TimePoint_tidytf, meta_seurat_tidytf)
+
+metadata_tidytf <- data.frame(metadata_tidytf)
+
+Obj_fcs_tidytf <- CreateSeuratObject(expr_fcs_tidytf) 
+
+# test <- meanShiftR::dfToSparse(expr_fcs_tidytf, transpose = FALSE)
+
+CellsMeta_tidytf = Obj_fcs_tidytf@meta.data
+
+Obj_fcs_tidytf <- AddMetaData(Obj_fcs_tidytf, cbind(CellsMeta_tidytf, metadata_tidytf))  
+
+class(expr_fcs_tidytf)
+```
+
+
+#### Create a tibble df of Seurat objects
+```{r}
+obj_tbl_seurat <- Obj_fcs_tidytf |> 
+   as_tibble()
+```
+
+#### Explore seurat object
+
+##### plot number of features per cell
+
+```{r}
+obj_tbl_seurat %>%
+  ggplot(aes(nFeature_RNA, fill = sample_id)) +
+  geom_histogram() +
+  tmp_theme
+```
+#### plot total features per cell
+
+```{r}
+obj_tbl_seurat %>%
+  ggplot(aes(sample_id, nCount_RNA, fill = sample_id)) +
+  geom_boxplot(outlier.shape = NA)  
+```
+
+## preprocess the dataset
+
+-   centering and scaling data matrix\
+
+```{r warning=FALSE}
+obj_tbl_tof <- obj_tbl_seurat |> 
+    select(where(is.numeric)) |> 
+    tof_preprocess(transform_fun = scale)
+
+class(obj_tbl_tof)
+```
+
+```{r}
 
 clust <- c("cd19", "cd20", "cxcr3", "cd21", "cd38", "cd138" )
 
 #BiocManager::install("FlowSOM")
-library(FlowSOM)
 
-flowsom_clust <- fcs_data |>
-    tof_preprocess() |>
+
+flowsom_clust <- obj_tbl_tof |>
     tof_cluster(method = "flowsom",cluster_cols = clust, 
                 num_metaclusters = 15,
                 augment = T) 
@@ -231,7 +295,7 @@ flow_tsne <-
    flowsom_clust |>
     tof_reduce_dimensions(method = "tsne")
 
-library(embed)
+
 flow_umap <-
    flowsom_clust |>
     tof_reduce_dimensions(method = "umap")
