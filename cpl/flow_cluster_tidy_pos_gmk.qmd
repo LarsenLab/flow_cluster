@@ -1,11 +1,31 @@
 ---
 title: "Flow Cytometry Data Analysis Workflow"
 author: "Geeta Karadkhele & Chris Larsen"
-format: html
+html:
+    self-contained: true
+    code-fold: true
+    code-link: true
+    toc: true
+    toc-location: left
+    link-external-newwindow: true
+    link-external-icon: true
+    fig-cap-location: top
+    theme: navbars #navbars for not dark mode
+execute:
+  echo: true
 editor: visual
+output:
+  html_notebook:
+    code_folding: hide
+    toc: yes
+    toc_depth: 6
+    toc_float: yes    
+  html_document:
+    toc: yes
+    toc_depth: 6
 ---
 
-###Steps
+### Steps
 
 Step 1: Read .fcs Files
 Load .fcs files using read.flowSet() from the flowCore package to handle flow cytometry data.
@@ -184,9 +204,9 @@ adapt <- adapt |>
 clust_cols <- c("cd19", "cd20", "cd38", "cxcr3", "ig_m", "ig_d", "cd21", "cd34", "cd24", "cd27", "cxcr4", "cxcr5", "cd138", "cd11c", "bcma")
 
 adapt_clusters_cd19_pos <- adapt |> filter(population == "CD19+") |>
-    tof_cluster(method = "flowsom", cluster_cols = clust_cols, num_metaclusters = 8)
+    tof_cluster(method = "flowsom", cluster_cols = all_of(clust_cols), num_metaclusters = 8)
 adapt_clusters_cd19_neg <- adapt |> filter(population == "CD19-") |>
-    tof_cluster(method = "flowsom", cluster_cols = clust_cols, num_metaclusters = 8)
+    tof_cluster(method = "flowsom", cluster_cols = all_of(clust_cols), num_metaclusters = 8)
 
 ```
 
@@ -211,10 +231,10 @@ adapt_clusters_cd19_pos_tsne |>
     geom_point() +
     theme_bw() +
     labs(fill = NULL)+ 
-scale_color_manual(values = colorRampPalette(brewer.pal(n = 11, name = "Spectral"))(length(unique(adapt_clusters_cd19_pos_tsne$.flowsom_metacluster)))) +
+scale_color_manual(values = colorRampPalette(brewer.pal(n = 9, name = "Spectral"))(length(unique(adapt_clusters_cd19_pos_tsne$.flowsom_metacluster)))) +
   tmp_theme + 
   theme(aspect.ratio = 1) + 
-  guides(color = FALSE)
+  guides(color = "none")
 
 adapt_clusters_cd19_pos_tsne |>
   ggplot(aes(x = .tsne1, y = .tsne2, color = as.factor(.flowsom_metacluster))) +  # Convert to factor if discrete
@@ -222,7 +242,7 @@ adapt_clusters_cd19_pos_tsne |>
   theme_bw() +
   labs(fill = NULL) +
   facet_wrap(~ visit) +
-  scale_color_manual(values = colorRampPalette(brewer.pal(n = 12, name = "Spectral"))(length(unique(adapt_clusters_cd19_pos_tsne$.flowsom_metacluster)))) +
+  scale_color_manual(values = colorRampPalette(brewer.pal(n = 9, name = "Spectral"))(length(unique(adapt_clusters_cd19_pos_tsne$.flowsom_metacluster)))) +
   tmp_theme +
   theme(aspect.ratio = 1)  + 
   guides(color = "none")
