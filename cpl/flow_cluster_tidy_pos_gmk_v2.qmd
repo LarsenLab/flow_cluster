@@ -183,11 +183,11 @@ bcr_flowset <- HDCytoData::Bodenmiller_BCR_XL_flowSet()
 
 tof_tbl_numeric <- tof_read_data(fcs_files) 
 
-# %>% select(where(is.numeric))
+# |> select(where(is.numeric))
 
 transformed_fcs_flowset <- 
   tof_tbl_numeric |>
-  dplyr::mutate(across(-ends_with("_name"), \(.x) asinh(.x / 5)))
+  dplyr::mutate(across(-ends_with("_name"), \(.x) asinh(.x / 150)))
 
 fcs_data <- transformed_fcs_flowset |>
     mutate(sample_id = str_remove(file_name, "\\.fcs")) |> 
@@ -198,7 +198,7 @@ fcs_data <- transformed_fcs_flowset |>
     rename_with(~ str_remove(., "\\|.+")) |> 
     rename_with(~ str_replace(., "-", "_")) |> 
     rename_with(str_to_lower) |> 
-    separate(sample_id, into = c("study_id", "patient_id", "visit_id", "date_id", "panel_id", "drop", "source_id"), sep = "_", extra = "drop", remove = F) %>%
+    separate(sample_id, into = c("study_id", "patient_id", "visit_id", "date_id", "panel_id", "drop", "source_id"), sep = "_", extra = "drop", remove = F) |>
     select(-drop) |> 
     unite("sample_id", study_id:population_id, remove = F) |> 
 tidyFlowCore::as_tof_tbl(.,                  include_metadata=TRUE)  |> 
@@ -209,16 +209,14 @@ fcs_data |>
   # each experiment in the flowSet 
   dplyr::count(sample_id, population_id)
 
-# seurat_obj <- as_seurat(fcs_data)
-
 
 ```
 
 ```{r}
 meta_seurat_tidytf <- fcs_data
     
-expr_fcs_tidytf <- t(fcs_data %>% 
-    dplyr::select(cd45, cd19:bcma) %>% 
+expr_fcs_tidytf <- t(fcs_data |> 
+    dplyr::select(cd45, cd19:bcma) |> 
     as.matrix())
 
 Cells_tidytf <- paste0("sample_", c(1:ncol(expr_fcs_tidytf)))
@@ -254,7 +252,7 @@ obj_tbl_seurat <- Obj_fcs_tidytf |>
 ##### plot number of features per cell
 
 ```{r}
-obj_tbl_seurat %>%
+obj_tbl_seurat |>
   ggplot(aes(nFeature_RNA, fill = sample_id)) +
   geom_histogram() +
   tmp_theme
@@ -262,7 +260,7 @@ obj_tbl_seurat %>%
 #### plot total features per cell
 
 ```{r}
-obj_tbl_seurat %>%
+obj_tbl_seurat |>
   ggplot(aes(sample_id, nCount_RNA, fill = sample_id)) +
   geom_boxplot(outlier.shape = NA)  
 ```
@@ -272,18 +270,28 @@ obj_tbl_seurat %>%
 -   centering and scaling data matrix\
 
 ```{r warning=FALSE}
-obj_tbl_tof <- obj_tbl_seurat |> 
-    select(where(is.numeric)) |> 
+obj_tbl_tof <- obj_tbl_seurat |>
+      tof_downsample(
+        method = "constant",
+        group_cols = visit_id,
+        # group_cols = .flowsom_metacluster,
+        # prop_cells = 0.25
+        num_cells = 1000
+    ) |> 
+    select(where(is.numeric)) |>
     tof_preprocess(transform_fun = scale)
 
 class(obj_tbl_tof)
 ```
+
 
 ```{r}
 
 clust <- c("cd19", "cd20", "cxcr3", "cd21", "cd38", "cd138" )
 
 #BiocManager::install("FlowSOM")
+
+
 
 
 flowsom_clust <- obj_tbl_tof |>
@@ -308,4 +316,16 @@ flow_umap |>
     geom_point() +
     theme_bw() +
     labs(fill = NULL)
+
+
+flow_tsne |>
+    mutate(.flowsom_metacluster = as.factor(.flowsom_metacluster)) |> 
+    slice_sample( n = 10000) |> 
+    ggplot(aes(x = .tsne1, y = .tsne2, color = .flowsom_metacluster, group=.flowsom_metacluster)) +
+    #geom_point(shape = 21) +
+    geom_point() +
+    theme_bw() +
+    labs(fill = NULL)
 ```
+
+
