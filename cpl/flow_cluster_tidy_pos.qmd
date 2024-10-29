@@ -362,15 +362,36 @@ adapt_clusters_cd19_pos_tsne |>
     ggplot(aes(x = .tsne1, y = .tsne2, color = .flowsom_metacluster)) +
     geom_point() +
     theme_bw() +
-    labs(fill = NULL)
+    labs(fill = NULL)+ 
+scale_color_manual(values = colorRampPalette(brewer.pal(n = 11, name = "Spectral"))(length(unique(adapt_clusters_cd19_pos_tsne$.flowsom_metacluster)))) +
+  tmp_theme + 
+  theme(aspect.ratio = 1) + 
+  guides(color = FALSE)
+
+adapt_clusters_cd19_pos_tsne |>
+  ggplot(aes(x = .tsne1, y = .tsne2, color = as.factor(.flowsom_metacluster))) +  # Convert to factor if discrete
+  geom_point() +
+  theme_bw() +
+  labs(fill = NULL) +
+  facet_wrap(~ visit) +
+  scale_color_manual(values = colorRampPalette(brewer.pal(n = 12, name = "Spectral"))(length(unique(adapt_clusters_cd19_pos_tsne$.flowsom_metacluster)))) +
+  tmp_theme +
+  theme(aspect.ratio = 1)  + 
+  guides(color = "none")
 
 
 adapt_clusters_cd19_pos_tsne |>
-    ggplot(aes(x = .tsne1, y = .tsne2, color = .flowsom_metacluster)) +
+    ggplot(aes(x = .tsne1, y = .tsne2, color = cd38)) +
     geom_point() +
     theme_bw() +
     labs(fill = NULL) +
-    facet_wrap(~ visit)
+    facet_wrap(~ visit) + 
+scale_color_gradientn(values = c(1, 0), na.value = "darkred",
+colours = colorRampPalette((brewer.pal(n = 9, name = "Spectral")))(50)) +
+  tmp_theme + 
+  theme(aspect.ratio = 1) 
+#+ 
+  #guides(color = FALSE)
 
 adapt_clusters_cd19_pos_tsne |>
     ggplot(aes(x = .tsne1, y = .tsne2, color = cd138)) +
