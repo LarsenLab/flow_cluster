@@ -1,0 +1,311 @@
+---
+title: "flow_cluster"
+format: html
+editor: visual
+---
+
+Step1: Reading .fcs files using read.flowSet function from flowCore R package
+
+Step2: Using Arcsinh transformation to normalize the fcs files. Read more \[<https://support.cytobank.org/hc/en-us/articles/206148057-About-the-Arcsinh-transform>\]
+
+Step3: Create a Seurat Object using normalized counts from .fcs files
+
+Step4: Run Dimensionality reduction, clustering and then visualize cells
+
+Step5: Integrate Seurat objects to understand similarities and differences among cell-types learnt from each .fcs file
+
+[mojaveazure/seurat-disk: Interfaces for HDF5-based Single Cell File Formats (github.com)](https://github.com/mojaveazure/seurat-disk)
+
+### Additional resources
+
+<https://github.com/keyes-timothy/tidytof>
+
+<https://stemangiola.github.io/tidyseurat/>
+
+# library
+
+```{r}
+# 
+# if (!require("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+#BiocManager::install(version = "3.19")
+#BiocManager::install("HDCytoData")
+library(HDCytoData)
+#BiocManager::install(c("flowCore","ncdfFlow","flowWorkspace","Seurat"))
+library(flowCore)
+library(ncdfFlow)
+library(flowWorkspace)
+library(Seurat)
+library(tidytof)
+library(tidyFlowCore)
+library(tidyseurat)
+library(FlowSOM)
+# if (!require(devtools)) install.packages("devtools")
+# BiocManager::install("keyes-timothy/tidyFlowCore")
+library(tidyFlowCore)
+library(readxl)
+library(cowplot)
+library(ggplot2)
+library(stringr)
+# remotes::install_github("mojaveazure/seurat-disk")
+
+library(RColorBrewer)
+library(pheatmap)
+library(ggpubr)
+library(ggsignif)
+library(Polychrome)
+library(gridExtra)
+
+
+
+library(tidyverse)
+library(janitor)
+library(reshape2)
+library(matrixStats)
+library(rstatix)
+library(here)
+library(embed)
+
+
+source(here("source_func.R"))
+
+# aesthetics
+
+library(showtext)
+library(sysfonts)
+font_add("Avenir", "~/Library/Fonts/Avenir.ttf") # path to your Avenir.ttf file
+# download Avenir-Book.ttf from https://github.com/platanus/fonts/blob/master/Avenir/Avenir-Book.ttf
+# rename it as "Avenir.ttf" & put it under "/Users/weiwen_zhang/Library/Fonts"
+
+
+
+
+```
+
+```{r}
+# if (!require(devtools)) install.packages("devtools")
+# devtools::install_github("keyes-timothy/tidytof")
+
+
+```
+
+```{r}
+# if (!require(devtools)) install.packages("devtools")
+# if (!requireNamespace("BiocManager", quietly = TRUE)) {
+#     install.packages("BiocManager")
+# }
+# 
+# 
+#BiocManager::install("tidyseurat")
+# BiocManager::install("keyes-timothy/tidyFlowCore")
+
+```
+
+### Theme
+
+```{r}
+# initialize showtext
+showtext_auto()
+
+size = 10
+tmp_theme = theme(
+    
+    text = element_text(size = size, family = "Avenir"),
+    # y
+    axis.title.y = element_text(size = size),
+    axis.text.y = element_text(size = size),
+    axis.ticks.y = element_line(size = 0.2, linetype = "solid", colour = "black"),
+    axis.line.y = element_line(size = 0.4, linetype = "solid", colour = "black"),
+    
+    # x
+    axis.title.x = element_text(size = size),
+    axis.text.x = element_text(size = size),
+    axis.ticks.x = element_line(size = 0.2, linetype = "solid", colour = "black"),
+    axis.line.x = element_line(size = 0.4, linetype = "solid", colour = "black"),
+    
+    # panel
+    panel.grid = element_blank(),  # remove background grid
+    panel.grid.major = element_blank(),  # remove major grid lines
+    panel.grid.minor = element_blank(),  # remove minor grid lines
+    panel.border = element_blank(),  # remove panel borders
+    panel.background = element_blank(),
+    
+    # facet
+    strip.background = element_rect(colour = "gray", fill = "white", linewidth = 0.5, linetype = "solid"), 
+    aspect.ratio = 1
+  )
+```
+
+# read in FACS files
+
+```{r}
+
+
+input_dir = here("raw/ITN089ST_adapt")
+fcs_files <- list.files(input_dir, pattern = ".fcs", full.names = TRUE)
+# fcs_files <- fcs_files[str_detect(fcs_files, "CD19\\+")]
+
+
+fcs_set = read.ncdfFlowSet(fcs_files, emptyValue = FALSE) 
+
+fcs_set |> 
+    class()
+
+bcr_flowset = read.ncdfFlowSet(fcs_files, emptyValue = FALSE) 
+
+# asinh_transformation <- flowCore::arcsinhTransform(a = 0, b = 1/5, c = 0)
+# transformation_list <- 
+#   flowCore::transformList(
+#     colnames(bcr_flowset), 
+#     asinh_transformation
+#   )
+# 
+# transformed_bcr_flowset <- flowCore::transform(bcr_flowset, transformation_list)
+
+
+# # extract all expression matrices from our flowSet 
+# combined_matrix <- flowCore::fsApply(bcr_flowset, exprs)
+# 
+# # take out the concatenated population_id column 
+# combined_population_id <- combined_matrix[, 'population_id']
+# 
+# # perform the calculation
+# table(combined_population_id)
+# #> combined_population_id
+```
+
+#### Reading data with `tof_read_data`
+
+```{r}
+bcr_flowset <- HDCytoData::Bodenmiller_BCR_XL_flowSet()
+
+
+
+tof_tbl_numeric <- tof_read_data(fcs_files) 
+
+# %>% select(where(is.numeric))
+
+transformed_fcs_flowset <- 
+  tof_tbl_numeric |>
+  dplyr::mutate(across(-ends_with("_name"), \(.x) asinh(.x / 5)))
+
+fcs_data <- transformed_fcs_flowset |>
+    mutate(sample_id = str_remove(file_name, "\\.fcs")) |> 
+    mutate(sample_id = str_remove(sample_id, "export_"))  |> 
+    mutate(population_id = str_extract(sample_id, "CD19.|CD45."))  |> 
+    mutate(time_point_id = str_extract(file_name, "V\\w+")) |> 
+    mutate(visit_sub_id = str_extract(time_point_id, "V.+(?=_)"))  |> 
+    rename_with(~ str_remove(., "\\|.+")) |> 
+    rename_with(~ str_replace(., "-", "_")) |> 
+    rename_with(str_to_lower) |> 
+    separate(sample_id, into = c("study_id", "patient_id", "visit_id", "date_id", "panel_id", "drop", "source_id"), sep = "_", extra = "drop", remove = F) %>%
+    select(-drop) |> 
+    unite("sample_id", study_id:population_id, remove = F) |> 
+tidyFlowCore::as_tof_tbl(.,                  include_metadata=TRUE)  |> 
+        clean_names()
+
+fcs_data |> 
+  # use the .tidyFlowCore_identifier pronoun to access the name of 
+  # each experiment in the flowSet 
+  dplyr::count(sample_id, population_id)
+
+# seurat_obj <- as_seurat(fcs_data)
+
+
+```
+
+```{r}
+meta_seurat_tidytf <- fcs_data
+    
+expr_fcs_tidytf <- t(fcs_data %>% 
+    dplyr::select(cd45, cd19:bcma) %>% 
+    as.matrix())
+
+Cells_tidytf <- paste0("sample_", c(1:ncol(expr_fcs_tidytf)))
+SampleName_tidytf <- rep("sample", ncol(expr_fcs_tidytf))
+TimePoint_tidytf <- rep("time", ncol(expr_fcs_tidytf))
+
+colnames(expr_fcs_tidytf) <- Cells_tidytf
+
+metadata_tidytf <- cbind(Cells_tidytf, SampleName_tidytf, TimePoint_tidytf, meta_seurat_tidytf)
+
+metadata_tidytf <- data.frame(metadata_tidytf)
+
+Obj_fcs_tidytf <- CreateSeuratObject(expr_fcs_tidytf) 
+
+# test <- meanShiftR::dfToSparse(expr_fcs_tidytf, transpose = FALSE)
+
+CellsMeta_tidytf = Obj_fcs_tidytf@meta.data
+
+Obj_fcs_tidytf <- AddMetaData(Obj_fcs_tidytf, cbind(CellsMeta_tidytf, metadata_tidytf))  
+
+class(expr_fcs_tidytf)
+```
+
+
+#### Create a tibble df of Seurat objects
+```{r}
+obj_tbl_seurat <- Obj_fcs_tidytf |> 
+   as_tibble()
+```
+
+#### Explore seurat object
+
+##### plot number of features per cell
+
+```{r}
+obj_tbl_seurat %>%
+  ggplot(aes(nFeature_RNA, fill = sample_id)) +
+  geom_histogram() +
+  tmp_theme
+```
+#### plot total features per cell
+
+```{r}
+obj_tbl_seurat %>%
+  ggplot(aes(sample_id, nCount_RNA, fill = sample_id)) +
+  geom_boxplot(outlier.shape = NA)  
+```
+
+## preprocess the dataset
+
+-   centering and scaling data matrix\
+
+```{r warning=FALSE}
+obj_tbl_tof <- obj_tbl_seurat |> 
+    select(where(is.numeric)) |> 
+    tof_preprocess(transform_fun = scale)
+
+class(obj_tbl_tof)
+```
+
+```{r}
+
+clust <- c("cd19", "cd20", "cxcr3", "cd21", "cd38", "cd138" )
+
+#BiocManager::install("FlowSOM")
+
+
+flowsom_clust <- obj_tbl_tof |>
+    tof_cluster(method = "flowsom",cluster_cols = clust, 
+                num_metaclusters = 15,
+                augment = T) 
+
+flow_tsne <-
+   flowsom_clust |>
+    tof_reduce_dimensions(method = "tsne")
+
+
+flow_umap <-
+   flowsom_clust |>
+    tof_reduce_dimensions(method = "umap")
+
+flow_umap |>
+    mutate(.flowsom_metacluster = as.factor(.flowsom_metacluster)) |> 
+    slice_sample( n = 10000) |> 
+    ggplot(aes(x = .umap1, y = .umap2, color = .flowsom_metacluster, group=.flowsom_metacluster)) +
+    #geom_point(shape = 21) +
+    geom_point() +
+    theme_bw() +
+    labs(fill = NULL)
+```
