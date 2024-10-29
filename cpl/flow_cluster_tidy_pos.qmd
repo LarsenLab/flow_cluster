@@ -266,21 +266,29 @@ phenograph_clusters <-
 ```
 
 ```{r}
-adapt <- adapt |> 
+
+adapt_cd19_pos <- adapt |> 
     filter(population == "CD19+")
+
+adapt_cd19_neg <- adapt |> 
+    filter(population == "CD19-")
 ```
 
 ```{r}
 
 clust_cols_adapt <- wrapr::qc(cd19, cd20, cd38, cxcr3, ig_m, ig_d, cd21, cd34, cd24, cd27, cxcr4, cxcr5, cd138, cd11c, bcma)
     
-adapt_clusters <-
-    adapt |>
+adapt_clusters_cd19_pos <-
+    adapt_cd19_pos |>
+    tof_cluster(method = "flowsom", cluster_cols = clust_cols_adapt)
+
+adapt_clusters_cd19_neg <-
+    adapt_cd19_neg |>
     tof_cluster(method = "flowsom", cluster_cols = clust_cols_adapt)
 
 
-adapt_clusters <-
-    adapt_clusters |>
+adapt_clusters_cd19_neg <-
+    adapt_cd19_neg |>
     tof_cluster(method = "phenograph", cluster_cols = clust_cols_adapt)
 ```
 
@@ -313,7 +321,7 @@ phenograph_tsne |>
     head()
 
 
-adapt_down <- adapt_clusters |>
+adapt_clusters_cd19_neg_down <- adapt_clusters_cd19_neg |>
     # downsample
     tof_downsample(
         method = "constant",
@@ -323,12 +331,22 @@ adapt_down <- adapt_clusters |>
         num_cells = 1000
     ) 
 
-adapt_tsne <-
-    adapt_clusters |>
+adapt_clusters_cd19_neg_tsne <-
+    adapt_clusters_cd19_neg_down |>
     tof_reduce_dimensions(method = "tsne")
 
-adapt_tsne <-
-    adapt_down |>
+adapt_clusters_cd19_pos_down <- adapt_clusters_cd19_pos |>
+    # downsample
+    tof_downsample(
+        method = "constant",
+        group_cols = visit,
+        # group_cols = .flowsom_metacluster,
+        # prop_cells = 0.25
+        num_cells = 1000
+    ) 
+
+adapt_clusters_cd19_pos_tsne <-
+    adapt_clusters_cd19_pos_down |>
     tof_reduce_dimensions(method = "tsne")
 ```
 
@@ -340,21 +358,42 @@ phenograph_tsne |>
     theme_bw() +
     labs(fill = NULL)
 
-adapt_tsne |>
+adapt_clusters_cd19_pos_tsne |>
     ggplot(aes(x = .tsne1, y = .tsne2, color = .flowsom_metacluster)) +
     geom_point() +
     theme_bw() +
     labs(fill = NULL)
 
 
-adapt_tsne |>
+adapt_clusters_cd19_pos_tsne |>
     ggplot(aes(x = .tsne1, y = .tsne2, color = .flowsom_metacluster)) +
     geom_point() +
     theme_bw() +
     labs(fill = NULL) +
     facet_wrap(~ visit)
 
-adapt_tsne |>
+adapt_clusters_cd19_pos_tsne |>
+    ggplot(aes(x = .tsne1, y = .tsne2, color = cd138)) +
+    geom_point() +
+    theme_bw() +
+    labs(fill = NULL) +
+    facet_wrap(~ visit)
+
+adapt_clusters_cd19_neg_tsne |>
+    ggplot(aes(x = .tsne1, y = .tsne2, color = .flowsom_metacluster)) +
+    geom_point() +
+    theme_bw() +
+    labs(fill = NULL)
+
+
+adapt_clusters_cd19_neg_tsne |>
+    ggplot(aes(x = .tsne1, y = .tsne2, color = .flowsom_metacluster)) +
+    geom_point() +
+    theme_bw() +
+    labs(fill = NULL) +
+    facet_wrap(~ visit)
+
+adapt_clusters_cd19_neg_tsne |>
     ggplot(aes(x = .tsne1, y = .tsne2, color = cd138)) +
     geom_point() +
     theme_bw() +
