@@ -300,16 +300,16 @@ adapt_clusters_cd19_neg <-
 
 ```{r}
 
-phenograph_clusters |>
-    # downsample
-    tof_downsample(
-        method = "constant",
-        group_cols = .phenograph_cluster,
-        num_cells = 200
-    ) |>
-    # count the number of downsampled cells in each cluster
-   group_by(.phenograph_cluster) |> 
-    summarise(n = n())
+# adapt_clusters_cd19_pos |>
+#     # downsample
+#     tof_downsample(
+#         method = "constant",
+#         group_cols = .flowsom_metacluster,
+#         num_cells = 200
+#     ) |>
+#     # count the number of downsampled cells in each cluster
+#    group_by(.flowsom_metacluster) |> 
+#     summarise(n = n())
 
 
 
@@ -317,14 +317,14 @@ phenograph_clusters |>
 
 ```{r}
 # perform the dimensionality reduction
-phenograph_tsne <-
-    phenograph_clusters |>
-    tof_reduce_dimensions(method = "tsne")
-
-# select only the tsne embedding columns using a tidyselect helper (contains)
-phenograph_tsne |>
-    select(contains("tsne")) |>
-    head()
+# phenograph_tsne <-
+#     phenograph_clusters |>
+#     tof_reduce_dimensions(method = "tsne")
+# 
+# # select only the tsne embedding columns using a tidyselect helper (contains)
+# phenograph_tsne |>
+#     select(contains("tsne")) |>
+#     head()
 
 
 adapt_clusters_cd19_neg_down <- adapt_clusters_cd19_neg |>
@@ -340,6 +340,7 @@ adapt_clusters_cd19_neg_down <- adapt_clusters_cd19_neg |>
 adapt_clusters_cd19_neg_tsne <-
     adapt_clusters_cd19_neg_down |>
     tof_reduce_dimensions(method = "tsne")
+
 
 adapt_clusters_cd19_pos_down <- adapt_clusters_cd19_pos |>
     # downsample
@@ -358,11 +359,11 @@ adapt_clusters_cd19_pos_tsne <-
 
 ```{r}
 # plot the tsne embeddings using color to distinguish between clusters
-phenograph_tsne |>
-    ggplot(aes(x = .tsne1, y = .tsne2, color = phenograph_cluster)) +
-    geom_point() +
-    theme_bw() +
-    labs(fill = NULL)
+# phenograph_tsne |>
+#     ggplot(aes(x = .tsne1, y = .tsne2, color = phenograph_cluster)) +
+#     geom_point() +
+#     theme_bw() +
+#     labs(fill = NULL)
 
 adapt_clusters_cd19_pos_tsne |>
     ggplot(aes(x = .tsne1, y = .tsne2, color = .flowsom_metacluster)) +
