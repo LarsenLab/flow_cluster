@@ -138,12 +138,12 @@ data("phenograph_data")
 ```
 
 ```{r}
-phenograph <-
-    tidytof_example_data("phenograph") |>
-    tof_read_data()
-
-phenograph |>
-    class()
+# phenograph <-
+#     tidytof_example_data("phenograph") |>
+#     tof_read_data()
+# 
+# phenograph |>
+#     class()
 
 ```
 
@@ -160,9 +160,9 @@ class(adapt)
 
 ```{r}
 # before preprocessing
-phenograph |>
-    select(`CD45|Sm154`, `CD34|Nd148`, `CD38|Er167`) |>
-    head()
+# phenograph |>
+#     select(`CD45|Sm154`, `CD34|Nd148`, `CD38|Er167`) |>
+#     head()
 
 # before preprocessing
 adapt |>
@@ -174,18 +174,19 @@ Transform Cytof cofactor 5, Flow cytometry cofactor 150
 
 ```{r}
 # perform preprocessing
-phenograph <-
-    phenograph |>
-    tof_preprocess()
-
-# inspect new values
-phenograph |>
-    select(`CD45|Sm154`, `CD34|Nd148`, `CD38|Er167`) |>
-    head()
+# phenograph <-
+#     phenograph |>
+#     tof_preprocess()
+# 
+# # inspect new values
+# phenograph |>
+#     select(`CD45|Sm154`, `CD34|Nd148`, `CD38|Er167`) |>
+#     head()
 
 # perform preprocessing
 adapt <- adapt |>
-    tof_preprocess(transform_fun = function(x) asinh(x/150))
+    tof_preprocess(transform_fun = function(x) asinh(x/150)) |> 
+    tof_preprocess(transform_fun = scale)
 
 
 # inspect new values
@@ -197,20 +198,20 @@ class(adapt)
 ```
 
 ```{r}
-phenograph <-
-    phenograph |>
-    # mutate the input tof_tbl
-    mutate(
-        PhenoGraph = as.character(PhenoGraph),
-        Condition = as.character(Condition)
-    )
-
-phenograph |>
-    # use dplyr's select method to show that the columns have been changed
-    select(where(is.character)) |>
-    head()
-
-class(phenograph)
+# phenograph <-
+#     phenograph |>
+#     # mutate the input tof_tbl
+#     mutate(
+#         PhenoGraph = as.character(PhenoGraph),
+#         Condition = as.character(Condition)
+#     )
+# 
+# phenograph |>
+#     # use dplyr's select method to show that the columns have been changed
+#     select(where(is.character)) |>
+#     head()
+# 
+# class(phenograph)
 ```
 
 ### Create new variables
@@ -252,15 +253,15 @@ class(adapt)
 ```{r}
 
 
-phenograph_clusters <-
-    phenograph_data |>
-    tof_preprocess() |>
-    tof_cluster(method = "flowsom", cluster_cols = contains("cd"))
-
-
-phenograph_clusters <-
-    phenograph_clusters |>
-    tof_cluster(method = "phenograph", cluster_cols = contains("cd"))
+# phenograph_clusters <-
+#     phenograph_data |>
+#     tof_preprocess() |>
+#     tof_cluster(method = "flowsom", cluster_cols = contains("cd"))
+# 
+# 
+# phenograph_clusters <-
+#     phenograph_clusters |>
+#     tof_cluster(method = "phenograph", cluster_cols = contains("cd"))
 
 
 ```
@@ -280,30 +281,35 @@ clust_cols_adapt <- wrapr::qc(cd19, cd20, cd38, cxcr3, ig_m, ig_d, cd21, cd34, c
     
 adapt_clusters_cd19_pos <-
     adapt_cd19_pos |>
-    tof_cluster(method = "flowsom", cluster_cols = clust_cols_adapt)
+    tof_cluster(method = "flowsom", 
+                cluster_cols = clust_cols_adapt,
+                num_metaclusters = 8)
 
 adapt_clusters_cd19_neg <-
     adapt_cd19_neg |>
-    tof_cluster(method = "flowsom", cluster_cols = clust_cols_adapt)
-
+    tof_cluster(method = "flowsom", 
+                cluster_cols = clust_cols_adapt,
+                num_metaclusters = 8)
 
 adapt_clusters_cd19_neg <-
     adapt_cd19_neg |>
-    tof_cluster(method = "phenograph", cluster_cols = clust_cols_adapt)
+    tof_cluster(method = "phenograph", 
+                cluster_cols = clust_cols_adapt,
+                num_metaclusters = 8)
 ```
 
 ```{r}
 
-phenograph_clusters |>
-    # downsample
-    tof_downsample(
-        method = "constant",
-        group_cols = .phenograph_cluster,
-        num_cells = 200
-    ) |>
-    # count the number of downsampled cells in each cluster
-   group_by(.phenograph_cluster) |> 
-    summarise(n = n())
+# adapt_clusters_cd19_pos |>
+#     # downsample
+#     tof_downsample(
+#         method = "constant",
+#         group_cols = .flowsom_metacluster,
+#         num_cells = 200
+#     ) |>
+#     # count the number of downsampled cells in each cluster
+#    group_by(.flowsom_metacluster) |> 
+#     summarise(n = n())
 
 
 
@@ -311,14 +317,14 @@ phenograph_clusters |>
 
 ```{r}
 # perform the dimensionality reduction
-phenograph_tsne <-
-    phenograph_clusters |>
-    tof_reduce_dimensions(method = "tsne")
-
-# select only the tsne embedding columns using a tidyselect helper (contains)
-phenograph_tsne |>
-    select(contains("tsne")) |>
-    head()
+# phenograph_tsne <-
+#     phenograph_clusters |>
+#     tof_reduce_dimensions(method = "tsne")
+# 
+# # select only the tsne embedding columns using a tidyselect helper (contains)
+# phenograph_tsne |>
+#     select(contains("tsne")) |>
+#     head()
 
 
 adapt_clusters_cd19_neg_down <- adapt_clusters_cd19_neg |>
@@ -334,6 +340,7 @@ adapt_clusters_cd19_neg_down <- adapt_clusters_cd19_neg |>
 adapt_clusters_cd19_neg_tsne <-
     adapt_clusters_cd19_neg_down |>
     tof_reduce_dimensions(method = "tsne")
+
 
 adapt_clusters_cd19_pos_down <- adapt_clusters_cd19_pos |>
     # downsample
@@ -352,11 +359,11 @@ adapt_clusters_cd19_pos_tsne <-
 
 ```{r}
 # plot the tsne embeddings using color to distinguish between clusters
-phenograph_tsne |>
-    ggplot(aes(x = .tsne1, y = .tsne2, color = phenograph_cluster)) +
-    geom_point() +
-    theme_bw() +
-    labs(fill = NULL)
+# phenograph_tsne |>
+#     ggplot(aes(x = .tsne1, y = .tsne2, color = phenograph_cluster)) +
+#     geom_point() +
+#     theme_bw() +
+#     labs(fill = NULL)
 
 adapt_clusters_cd19_pos_tsne |>
     ggplot(aes(x = .tsne1, y = .tsne2, color = .flowsom_metacluster)) +
@@ -425,8 +432,6 @@ adapt_clusters_cd19_neg_tsne |>
 ```{r}
 data(phenograph_data)
 
-# phenograph_data |>
-#     count(phenograph_cluster)
 
 phenograph_data |>
     group_by(phenograph_cluster) |> 
