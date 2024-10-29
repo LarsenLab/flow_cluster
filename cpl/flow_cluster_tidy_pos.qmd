@@ -138,12 +138,12 @@ data("phenograph_data")
 ```
 
 ```{r}
-phenograph <-
-    tidytof_example_data("phenograph") |>
-    tof_read_data()
-
-phenograph |>
-    class()
+# phenograph <-
+#     tidytof_example_data("phenograph") |>
+#     tof_read_data()
+# 
+# phenograph |>
+#     class()
 
 ```
 
@@ -160,9 +160,9 @@ class(adapt)
 
 ```{r}
 # before preprocessing
-phenograph |>
-    select(`CD45|Sm154`, `CD34|Nd148`, `CD38|Er167`) |>
-    head()
+# phenograph |>
+#     select(`CD45|Sm154`, `CD34|Nd148`, `CD38|Er167`) |>
+#     head()
 
 # before preprocessing
 adapt |>
@@ -174,14 +174,14 @@ Transform Cytof cofactor 5, Flow cytometry cofactor 150
 
 ```{r}
 # perform preprocessing
-phenograph <-
-    phenograph |>
-    tof_preprocess()
-
-# inspect new values
-phenograph |>
-    select(`CD45|Sm154`, `CD34|Nd148`, `CD38|Er167`) |>
-    head()
+# phenograph <-
+#     phenograph |>
+#     tof_preprocess()
+# 
+# # inspect new values
+# phenograph |>
+#     select(`CD45|Sm154`, `CD34|Nd148`, `CD38|Er167`) |>
+#     head()
 
 # perform preprocessing
 adapt <- adapt |>
@@ -198,20 +198,20 @@ class(adapt)
 ```
 
 ```{r}
-phenograph <-
-    phenograph |>
-    # mutate the input tof_tbl
-    mutate(
-        PhenoGraph = as.character(PhenoGraph),
-        Condition = as.character(Condition)
-    )
-
-phenograph |>
-    # use dplyr's select method to show that the columns have been changed
-    select(where(is.character)) |>
-    head()
-
-class(phenograph)
+# phenograph <-
+#     phenograph |>
+#     # mutate the input tof_tbl
+#     mutate(
+#         PhenoGraph = as.character(PhenoGraph),
+#         Condition = as.character(Condition)
+#     )
+# 
+# phenograph |>
+#     # use dplyr's select method to show that the columns have been changed
+#     select(where(is.character)) |>
+#     head()
+# 
+# class(phenograph)
 ```
 
 ### Create new variables
@@ -253,15 +253,15 @@ class(adapt)
 ```{r}
 
 
-phenograph_clusters <-
-    phenograph_data |>
-    tof_preprocess() |>
-    tof_cluster(method = "flowsom", cluster_cols = contains("cd"))
-
-
-phenograph_clusters <-
-    phenograph_clusters |>
-    tof_cluster(method = "phenograph", cluster_cols = contains("cd"))
+# phenograph_clusters <-
+#     phenograph_data |>
+#     tof_preprocess() |>
+#     tof_cluster(method = "flowsom", cluster_cols = contains("cd"))
+# 
+# 
+# phenograph_clusters <-
+#     phenograph_clusters |>
+#     tof_cluster(method = "phenograph", cluster_cols = contains("cd"))
 
 
 ```
@@ -407,8 +407,6 @@ adapt_clusters_cd19_neg_tsne |>
 ```{r}
 data(phenograph_data)
 
-# phenograph_data |>
-#     count(phenograph_cluster)
 
 phenograph_data |>
     group_by(phenograph_cluster) |> 
