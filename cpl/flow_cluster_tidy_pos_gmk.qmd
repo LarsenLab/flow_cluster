@@ -168,21 +168,42 @@ tmp_theme = theme(
 
 ```{r include=FALSE, warning=FALSE}
 input_dir <- here("raw/ITN089ST_adapt")
-fcs_files <- list.files(input_dir, pattern = ".fcs", full.names = TRUE)
-fcs_files <- fcs_files[str_detect(fcs_files, "CD19\\+")]
+#fcs_files <- list.files(input_dir, pattern = ".fcs", full.names = TRUE)
+#fcs_files <- fcs_files[str_detect(fcs_files, "CD19\\+")]
 ```
 
 ##### Step 2: Read and Tidy FCS Data with tidytof
 
 ```{r include=FALSE, warning=FALSE}
 adapt <- tof_read_data(input_dir) |> 
-    clean_names() |> 
-    mutate(across(where(is.numeric), ~ asinh(. / 150)))
+    clean_names() 
+# |> 
+#     mutate(across(where(is.numeric), ~ asinh(. / 150)))
 
-adapt <- tof_preprocess(adapt, transform_fun = scale)  
 ```
 
-##### Step 3: Create Sample Metadata Variables
+##### Step 3: Prepare and process data
+
+```{r}
+# Define channel columns first
+channel_cols <- adapt %>%
+  select(where(is.numeric), matches("cd19|cd20|cd38|cxcr3|ig_m|ig_d|cd21|cd34|cd24|cd27|cxcr4|cxcr5|cd138|cd11c|bcma")) %>%
+  names()
+
+# Now apply tof_preprocess with the defined channel columns
+adapt <- adapt |>
+  tof_preprocess(
+    channel_cols = all_of(channel_cols),  # Use the selected column names
+    transform_fun = scale
+  ) |>
+  tof_preprocess(
+    transform_fun = function(x) asinh(x / 150)
+  )
+
+```
+
+##### Step 4: Create Sample Metadata Variables 
+
 ```{r}
 adapt <- adapt |> 
     mutate(sample_id = str_remove(file_name, "\\.fcs")) |> 
@@ -197,38 +218,42 @@ adapt <- adapt |>
     rename_with(str_to_lower)
 ```
 
-#### Prepare and process data
+### Positive
+#### Clustering and Dimensionality Reduction
+##### Step 5: Cluster Cells 
+We are using this method to generate an elbow plot to help estimate the optimal number of clusters. While the results may not be highly informative on their own, combining this approach with visual inspection and foundational biological insights can help finalize the clustering results. Additional details are available here: [Elbow Method in R](https://www.statology.org/elbow-method-in-r/).
 
 ```{r}
-adapt_processed <- adapt |> 
-    tof_preprocess(
-        channel_cols = where(is.numeric),
-        transform_fun = scale
-    )
-```
+library(cluster)
+library(factoextra)
 
-#### Clustering and Dimensionality Reduction
-##### Step 4: Cluster Cells 
+
+df_pos <- adapt |>   
+  sample_frac(0.1) |>     
+  filter(population == "CD19+") |>
+  select(matches("cd19|cd20|cd38|cxcr3|ig_m|ig_d|cd21|cd34|cd24|cd27|cxcr4|cxcr5|cd138|cd11c|bcma")) |>     
+  drop_na() |>
+  select(where(is.numeric))  
+
+fviz_nbclust(df_pos, kmeans, method = "wss", k.max = 10,
+  nboot = 100) +
+  ggtitle("Elbow Plot for Optimal Number of Clusters") +
+  theme_minimal()
+```
 
 ```{r}
 clust_cols <- c("cd19", "cd20", "cd38", "cxcr3", "ig_m", "ig_d", "cd21", "cd34", "cd24", "cd27", "cxcr4", "cxcr5", "cd138", "cd11c", "bcma")
 
 adapt_clusters_cd19_pos <- adapt |> filter(population == "CD19+") |>
-    tof_cluster(method = "flowsom", cluster_cols = all_of(clust_cols), num_metaclusters = 8,
-                seed = 1234)
-adapt_clusters_cd19_neg <- adapt |> filter(population == "CD19-") |>
-    tof_cluster(method = "flowsom", cluster_cols = all_of(clust_cols), num_metaclusters = 8)
+    tof_cluster(method = "flowsom", cluster_cols = all_of(clust_cols), 
+                num_metaclusters = 8)
 
 ```
 
-##### Step 5: Downsample and Reduce Dimensions (t-SNE)
+##### Step 6: Downsample and Reduce Dimensions (t-SNE)
 
 ```{r}
 adapt_clusters_cd19_pos_tsne <- adapt_clusters_cd19_pos |>
-    tof_downsample(method = "constant", group_cols = visit, num_cells = 1000) |>
-    tof_reduce_dimensions(method = "tsne")
-
-adapt_clusters_cd19_neg_tsne <- adapt_clusters_cd19_neg |>
     tof_downsample(method = "constant", group_cols = visit, num_cells = 1000) |>
     tof_reduce_dimensions(method = "tsne")
 ```
@@ -270,10 +295,7 @@ colours = colorRampPalette((brewer.pal(n = 9, name = "Spectral")))(50)) +
   tmp_theme + 
   theme(aspect.ratio = 1) 
 ```
-
-
 ##### Plot by Cluster with Labels
-
 ```{r}
 clust_cols <- c("cd19", "cd20", "cd38", "cxcr3", "ig_m", "ig_d", "cd21", "cd34", 
                 "cd24", "cd27", "cxcr4", "cxcr5", "cd138", "cd11c", "bcma")
@@ -293,8 +315,11 @@ ggplot(adapt_clusters_long, aes(x = .tsne1, y = .tsne2, color = expression)) +
   scale_color_gradientn(values = c(1, 0), na.value = "darkred",
 colours = colorRampPalette((brewer.pal(n = 9, name = "Spectral")))(50)) +
   facet_wrap(~ marker, scales = "free") +
-  labs(color = "Expression") +
-  theme(aspect.ratio = 0.5)
+  labs(color = "Expression",
+       title="CD19 Pos Bone Marrow B cell Lineage",
+       subtitle = "Marker Expression") +
+  theme(aspect.ratio = 0.5) +
+    guides(color = "none")
 
 
 ```
@@ -311,8 +336,8 @@ cluster_labels <- adapt_clusters_long |>
 
 
 ggplot(adapt_clusters_long, aes(x = .tsne1, y = .tsne2, color = .flowsom_metacluster)) +
-  geom_point(aes(alpha = expression)) +  
-  facet_wrap(~ marker, scales = "free") +
+  geom_point() +  
+  #facet_wrap(~ marker, scales = "free") +
   geom_text(
     data = cluster_labels,
     aes(x = label_x, y = label_y, label = .flowsom_metacluster),
@@ -321,11 +346,142 @@ ggplot(adapt_clusters_long, aes(x = .tsne1, y = .tsne2, color = .flowsom_metaclu
     vjust = -0.5
   ) +
   theme_bw() +
+  labs(title="CD19 Pos Bone Marrow B cell Lineage")+
   scale_color_manual(values = colorRampPalette(brewer.pal(n = 12, name = "Set3"))(length(unique(adapt_clusters_long$.flowsom_metacluster)))) +
   #scale_alpha_continuous(range = c(0.2, 1)) +  # Broaden alpha range for better brightness contrast
   #labs(color = "Cluster", alpha = "Expression") +
   theme(aspect.ratio = 0.50) +
-    guides(color = "none",
-           size="none")
+    guides(color = "none")
 ```
+
+### Negative 
+#### Clustering and Dimensionality Reduction
+##### Step 5: Cluster Cells
+```{r}
+df_neg <- adapt |>
+  sample_frac(0.1) |>     
+  filter(population == "CD19-") |>
+  select(matches("cd19|cd20|cd38|cxcr3|ig_m|ig_d|cd21|cd34|cd24|cd27|cxcr4|cxcr5|cd138|cd11c|bcma")) |>  
+  drop_na() |>
+  select(where(is.numeric))  
+
+fviz_nbclust(df_neg, kmeans, method = "wss", k.max = 15,
+  nboot = 100) +
+  ggtitle("Elbow Plot for Optimal Number of Clusters") +
+  theme_minimal()
+```
+
+```{r}
+clust_cols_neg <- c("cd20", "cd38", "cxcr3",  "cd21", "cd34", "cd24", "cd27", "cxcr4", "cxcr5", "cd138", "cd11c", "bcma")
+    
+adapt_clusters_cd19_neg <- adapt |> filter(population == "CD19-") |>
+    tof_cluster(method = "flowsom", cluster_cols = all_of(clust_cols_neg), num_metaclusters = 6)
+```
+
+##### Step 6: Downsample and Reduce Dimensions (t-SNE)
+
+```{r}
+adapt_clusters_cd19_neg_tsne <- adapt_clusters_cd19_neg |>
+    tof_downsample(method = "constant", group_cols = visit, num_cells = 1000) |>
+    tof_reduce_dimensions(method = "tsne")
+```
+
+### Visualization
+#### Plotting Clusters and Expression Levels
+
+```{r}
+# Calculate the number of unique clusters in the .flowsom_metacluster column
+num_clusters <- length(unique(adapt_clusters_cd19_neg_tsne$.flowsom_metacluster))
+
+# Ensure color palette has enough colors
+adapt_clusters_cd19_neg_tsne |>
+  ggplot(aes(x = .tsne1, y = .tsne2, color = .flowsom_metacluster)) +
+  geom_point() +
+  theme_bw() +
+  labs(fill = NULL) + 
+  scale_color_manual(values = colorRampPalette(brewer.pal(n = min(11, num_clusters), name = "Spectral"))(num_clusters)) +
+  tmp_theme + 
+  theme(aspect.ratio = 1) + 
+  guides(color = "none")
+
+adapt_clusters_cd19_neg_tsne |>
+  ggplot(aes(x = .tsne1, y = .tsne2, color = as.factor(.flowsom_metacluster))) +  # Convert to factor if discrete
+  geom_point() +
+  theme_bw() +
+  labs(fill = NULL) +
+  facet_wrap(~ visit) +
+  scale_color_manual(values = colorRampPalette(brewer.pal(n = min(11, num_clusters), name = "Spectral"))(num_clusters)) +
+  tmp_theme +
+  theme(aspect.ratio = 1)  + 
+  guides(color = "none")
+
+
+adapt_clusters_cd19_neg_tsne |>
+    ggplot(aes(x = .tsne1, y = .tsne2, color = cd38)) +
+    geom_point() +
+    theme_bw() +
+    labs(fill = NULL) +
+    facet_wrap(~ visit) + 
+scale_color_gradientn(values = c(1, 0), na.value = "darkred",
+colours = colorRampPalette((brewer.pal(n = 10, name = "Spectral")))(50)) +
+  tmp_theme + 
+  theme(aspect.ratio = 1) 
+```
+
+```{r}
+
+adapt_clusters_long <- adapt_clusters_cd19_neg_tsne |>
+  select(clust_cols_neg,.flowsom_metacluster:.tsne2,visit)|>
+  pivot_longer(cols=clust_cols_neg,names_to = "marker", values_to = "expression")|> 
+    mutate(.flowsom_metacluster = as.factor(.flowsom_metacluster),
+           marker = as.factor(marker),
+           visit=as.factor(visit)) 
+    
+
+
+ggplot(adapt_clusters_long, aes(x = .tsne1, y = .tsne2, color = expression)) +
+  geom_point() +
+  theme_bw() +
+  scale_color_gradientn(values = c(1, 0), na.value = "darkred",
+colours = colorRampPalette((brewer.pal(n = 11, name = "Spectral")))(50)) +
+  facet_wrap(~ marker, scales = "free") +
+  labs(color = "Expression",
+       title="CD19 Neg Bone Marrow B cell Lineage",
+       subtitle = "Marker Expression") +
+  theme(aspect.ratio = 0.5) +
+    guides(color = "none")
+
+
+```
+
+#### Expression by Marker 
+```{r}
+cluster_labels <- adapt_clusters_long |>
+  group_by(marker, .flowsom_metacluster) |>
+  summarise(
+    label_x = median(.tsne1, na.rm = TRUE),
+    label_y = median(.tsne2, na.rm = TRUE),
+    .groups = 'drop'
+  )
+
+
+ggplot(adapt_clusters_long, aes(x = .tsne1, y = .tsne2, color = .flowsom_metacluster)) +
+  geom_point() +  
+  #facet_wrap(~ marker, scales = "free") +
+  geom_text(
+    data = cluster_labels,
+    aes(x = label_x, y = label_y, label = .flowsom_metacluster),
+    color = "black",  
+    size = 3,
+    vjust = -0.5
+  ) +
+  theme_bw() +
+  labs(title="CD19 Neg Bone Marrow B cell Lineage")+
+  scale_color_manual(values = colorRampPalette(brewer.pal(n = min(11, num_clusters), name = "Spectral"))(num_clusters)) +
+  #scale_alpha_continuous(range = c(0.2, 1)) +  # Broaden alpha range for better brightness contrast
+  #labs(color = "Cluster", alpha = "Expression") +
+  theme(aspect.ratio = 0.50) +
+    guides(color = "none")
+```
+
 
