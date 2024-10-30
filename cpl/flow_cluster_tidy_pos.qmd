@@ -34,6 +34,7 @@ library(readxl)
 library(cowplot)
 library(ggplot2)
 library(stringr)
+library(plot_ly)
 # remotes::install_github("mojaveazure/seurat-disk")
 
 library(RColorBrewer)
@@ -120,6 +121,7 @@ tmp_theme = theme(
 
 
 input_dir = here("raw/ITN089ST_adapt")
+input_dir = here("raw/20241029_Adapt_B_cell_lineage_cohort1")
 fcs_files <- list.files(input_dir, pattern = ".fcs", full.names = TRUE)
 fcs_files <- fcs_files[str_detect(fcs_files, "CD19\\+")]
 
@@ -291,6 +293,15 @@ adapt_clusters_cd19_neg <-
                 cluster_cols = clust_cols_adapt,
                 num_metaclusters = 12)
 
+
+adapt_clusters <-
+    adapt |>
+    tof_cluster(method = "flowsom", 
+                cluster_cols = clust_cols_adapt)
+
+# ,
+#                 num_metaclusters = 12
+
 # adapt_clusters_cd19_neg <-
 #     adapt_cd19_neg |>
 #     tof_cluster(method = "phenograph", 
@@ -355,6 +366,63 @@ adapt_clusters_cd19_pos_down <- adapt_clusters_cd19_pos |>
 adapt_clusters_cd19_pos_tsne <-
     adapt_clusters_cd19_pos_down |>
     tof_reduce_dimensions(method = "tsne")
+
+
+adapt_clusters_down <- adapt_clusters |>
+    # downsample
+    tof_downsample(
+        method = "constant",
+        group_cols = visit,
+        # group_cols = .flowsom_metacluster,
+        # prop_cells = 0.25
+        num_cells = 5000
+    ) 
+
+adapt_clusters_tsne <-
+    adapt_clusters_down |>
+    tof_reduce_dimensions(method = "tsne")
+```
+
+```{r}
+set.seed(1234)
+
+adapt_clusters_tsne |>
+    ggplot(aes(x = .tsne1, y = .tsne2, color = .flowsom_metacluster)) +
+    geom_point() +
+    theme_bw() +
+    labs(fill = NULL)+ 
+scale_color_manual(values = colorRampPalette(brewer.pal(n = 11, name = "Spectral"))(length(unique(adapt_clusters_tsne$.flowsom_metacluster)))) +
+  tmp_theme + 
+  theme(aspect.ratio = 1) + 
+  guides(color = FALSE)
+
+adapt_clusters_cd19_pos_tsne |>
+  ggplot(aes(x = .tsne1, y = .tsne2, color = as.factor(.flowsom_metacluster))) +  # Convert to factor if discrete
+  geom_point() +
+  theme_bw() +
+  labs(fill = NULL) +
+  facet_wrap(~ visit) +
+  scale_color_manual(values = colorRampPalette(brewer.pal(n = 12, name = "Spectral"))(length(unique(adapt_clusters_cd19_pos_tsne$.flowsom_metacluster)))) +
+  tmp_theme +
+  theme(aspect.ratio = 1)  + 
+  guides(color = "none")
+
+adapt_clusters_cd19_pos_tsne |>
+    ggplot(aes(x = .tsne1, y = .tsne2, color = cd19)) +
+    geom_point() +
+    theme_bw() +
+    labs(fill = NULL) +
+    facet_wrap(~ visit) + 
+scale_color_gradientn(values = c(1, 0), na.value = "darkred",
+colours = colorRampPalette((brewer.pal(n = 9, name = "Spectral")))(50)) +
+  tmp_theme + 
+  theme(aspect.ratio = 1) 
+
+
+adapt_clusters_tsne |>
+  plot_ly(x = .tsne1, y = .tsne2,
+    color = ~seurat_clusters
+  )
 ```
 
 ```{r}
@@ -382,6 +450,17 @@ adapt_clusters_cd19_pos_tsne |>
   theme(aspect.ratio = 1)  + 
   guides(color = "none")
 
+adapt_clusters_cd19_pos_tsne |>
+    ggplot(aes(x = .tsne1, y = .tsne2, color = cd19)) +
+    geom_point() +
+    theme_bw() +
+    labs(fill = NULL) +
+    facet_wrap(~ visit) + 
+scale_color_gradientn(values = c(1, 0), na.value = "darkred",
+colours = colorRampPalette((brewer.pal(n = 9, name = "Spectral")))(50)) +
+  tmp_theme + 
+  theme(aspect.ratio = 1) 
+
 
 adapt_clusters_cd19_pos_tsne |>
     ggplot(aes(x = .tsne1, y = .tsne2, color = cd38)) +
@@ -406,7 +485,7 @@ colours = colorRampPalette((brewer.pal(n = 9, name = "Spectral")))(50)) +
   theme(aspect.ratio = 1) 
 
 adapt_clusters_cd19_pos_tsne |>
-    ggplot(aes(x = .tsne1, y = .tsne2, color = ig_m)) +
+    ggplot(aes(x = .tsne1, y = .tsne2, color = ig_d)) +
     geom_point() +
     theme_bw() +
     labs(fill = NULL) +
@@ -452,6 +531,16 @@ adapt_clusters_cd19_neg_tsne |>
     theme_bw() +
     labs(fill = NULL) +
     facet_wrap(~ visit)
+
+adapt_clusters_cd19_pos_tsne |>
+    ggplot(aes(x = .tsne1, y = .tsne2, color = .flowsom_metacluster)) +
+    geom_point() +
+    theme_bw() +
+    labs(fill = NULL)+ 
+scale_color_manual(values = colorRampPalette(brewer.pal(n = 11, name = "Spectral"))(length(unique(adapt_clusters_cd19_pos_tsne$.flowsom_metacluster)))) +
+  tmp_theme + 
+  theme(aspect.ratio = 1) + 
+  guides(color = FALSE)
 ```
 
 ```{r}
