@@ -197,6 +197,16 @@ adapt <- adapt |>
     rename_with(str_to_lower)
 ```
 
+#### Prepare and process data
+
+```{r}
+adapt_processed <- adapt |> 
+    tof_preprocess(
+        channel_cols = where(is.numeric),
+        transform_fun = scale
+    )
+```
+
 #### Clustering and Dimensionality Reduction
 ##### Step 4: Cluster Cells 
 
@@ -204,7 +214,8 @@ adapt <- adapt |>
 clust_cols <- c("cd19", "cd20", "cd38", "cxcr3", "ig_m", "ig_d", "cd21", "cd34", "cd24", "cd27", "cxcr4", "cxcr5", "cd138", "cd11c", "bcma")
 
 adapt_clusters_cd19_pos <- adapt |> filter(population == "CD19+") |>
-    tof_cluster(method = "flowsom", cluster_cols = all_of(clust_cols), num_metaclusters = 8)
+    tof_cluster(method = "flowsom", cluster_cols = all_of(clust_cols), num_metaclusters = 8,
+                seed = 1234)
 adapt_clusters_cd19_neg <- adapt |> filter(population == "CD19-") |>
     tof_cluster(method = "flowsom", cluster_cols = all_of(clust_cols), num_metaclusters = 8)
 
