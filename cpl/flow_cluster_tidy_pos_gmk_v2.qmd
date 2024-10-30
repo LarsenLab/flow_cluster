@@ -240,8 +240,8 @@ Obj_fcs_tidytf <- AddMetaData(Obj_fcs_tidytf, cbind(CellsMeta_tidytf, metadata_t
 class(expr_fcs_tidytf)
 ```
 
-
 #### Create a tibble df of Seurat objects
+
 ```{r}
 obj_tbl_seurat <- Obj_fcs_tidytf |> 
    as_tibble()
@@ -257,6 +257,7 @@ obj_tbl_seurat |>
   geom_histogram() +
   tmp_theme
 ```
+
 #### plot total features per cell
 
 ```{r}
@@ -283,7 +284,6 @@ obj_tbl_tof <- obj_tbl_seurat |>
 
 class(obj_tbl_tof)
 ```
-
 
 ```{r}
 
@@ -327,5 +327,3 @@ flow_tsne |>
     theme_bw() +
     labs(fill = NULL)
 ```
-
-
