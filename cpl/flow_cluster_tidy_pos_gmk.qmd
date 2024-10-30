@@ -72,6 +72,7 @@ library(readxl)
 library(cowplot)
 library(ggplot2)
 library(stringr)
+library(plotly)
 # remotes::install_github("mojaveazure/seurat-disk")
 
 library(RColorBrewer)
@@ -90,6 +91,9 @@ library(matrixStats)
 library(rstatix)
 library(here)
 library(embed)
+library(cluster)
+library(factoextra)
+
 
 
 source(here("source_func.R"))
@@ -106,6 +110,8 @@ font_add("Avenir", "~/Library/Fonts/Avenir.ttf") # path to your Avenir.ttf file
 
 
 ```
+
+
 
 ```{r}
 # if (!require(devtools)) install.packages("devtools")
@@ -187,8 +193,8 @@ adapt <- tof_read_data(input_dir) |>
 ```{r}
 # Define channel columns first
 channel_cols <- adapt %>%
-  select(where(is.numeric), matches("cd19|cd20|cd38|cxcr3|ig_m|ig_d|cd21|cd34|cd24|cd27|cxcr4|cxcr5|cd138|cd11c|bcma")) %>%
-  names()
+  select(where(is.numeric), matches("cd19|cd20|cd38|cxcr3|ig_m|ig_d|cd21|cd34|cd24|cd27|cxcr4|cxcr5|cd138|cd11c|bcma")) |> 
+    names()
 
 # Now apply tof_preprocess with the defined channel columns
 adapt <- adapt |>
@@ -224,10 +230,6 @@ adapt <- adapt |>
 We are using this method to generate an elbow plot to help estimate the optimal number of clusters. While the results may not be highly informative on their own, combining this approach with visual inspection and foundational biological insights can help finalize the clustering results. Additional details are available here: [Elbow Method in R](https://www.statology.org/elbow-method-in-r/).
 
 ```{r}
-library(cluster)
-library(factoextra)
-
-
 df_pos <- adapt |>   
   sample_frac(0.1) |>     
   filter(population == "CD19+") |>
@@ -242,6 +244,7 @@ fviz_nbclust(df_pos, kmeans, method = "wss", k.max = 10,
 ```
 
 ```{r}
+set.seed(123)
 clust_cols <- c("cd19", "cd20", "cd38", "cxcr3", "ig_m", "ig_d", "cd21", "cd34", "cd24", "cd27", "cxcr4", "cxcr5", "cd138", "cd11c", "bcma")
 
 adapt_clusters_cd19_pos <- adapt |> filter(population == "CD19+") |>
@@ -297,9 +300,6 @@ colours = colorRampPalette((brewer.pal(n = 9, name = "Spectral")))(50)) +
 ```
 ##### Plot by Cluster with Labels
 ```{r}
-#| fig-height: 30
-#| fig-width: 30
-#| 
 clust_cols <- c("cd19", "cd20", "cd38", "cxcr3", "ig_m", "ig_d", "cd21", "cd34", 
                 "cd24", "cd27", "cxcr4", "cxcr5", "cd138", "cd11c", "bcma")
 
@@ -356,6 +356,17 @@ ggplot(adapt_clusters_long, aes(x = .tsne1, y = .tsne2, color = .flowsom_metaclu
   theme(aspect.ratio = 0.50) +
     guides(color = "none")
 ```
+##### 3D Visual of clusters
+```{r}
+
+p <- plot_ly(adapt_clusters_long, x=~.tsne1, y=~.tsne2, 
+z=~expression, color=~.flowsom_metacluster) 
+# %>%
+#      add_markers(size=1.5)
+print(p)
+
+```
+
 ##### Step 7: Differntial discovery analysis
 
 ##### Calculating Cluster Proportions
@@ -401,17 +412,18 @@ df_neg <- adapt |>
   drop_na() |>
   select(where(is.numeric))  
 
-fviz_nbclust(df_neg, kmeans, method = "wss", k.max = 15,
+fviz_nbclust(df_neg, kmeans, method = "wss", k.max = 10,
   nboot = 100) +
   ggtitle("Elbow Plot for Optimal Number of Clusters") +
   theme_minimal()
 ```
 
 ```{r}
+set.seed(123)
 clust_cols_neg <- c("cd20", "cd38", "cxcr3",  "cd21", "cd34", "cd24", "cd27", "cxcr4", "cxcr5", "cd138", "cd11c", "bcma")
     
 adapt_clusters_cd19_neg <- adapt |> filter(population == "CD19-") |>
-    tof_cluster(method = "flowsom", cluster_cols = all_of(clust_cols_neg), num_metaclusters = 6)
+    tof_cluster(method = "flowsom", cluster_cols = all_of(clust_cols_neg), num_metaclusters = 7) 
 ```
 
 ##### Step 6: Downsample and Reduce Dimensions (t-SNE)
@@ -467,8 +479,8 @@ colours = colorRampPalette((brewer.pal(n = 10, name = "Spectral")))(50)) +
 ```{r}
 
 adapt_clusters_long <- adapt_clusters_cd19_neg_tsne |>
-  select(clust_cols_neg,.flowsom_metacluster:.tsne2,visit)|>
-  pivot_longer(cols=clust_cols_neg,names_to = "marker", values_to = "expression")|> 
+  select(all_of(clust_cols_neg),.flowsom_metacluster:.tsne2,visit)|>
+  pivot_longer(cols=all_of(clust_cols_neg),names_to = "marker", values_to = "expression")|> 
     mutate(.flowsom_metacluster = as.factor(.flowsom_metacluster),
            marker = as.factor(marker),
            visit=as.factor(visit)) 
@@ -519,6 +531,17 @@ ggplot(adapt_clusters_long, aes(x = .tsne1, y = .tsne2, color = .flowsom_metaclu
   theme(aspect.ratio = 0.50) +
     guides(color = "none")
 ```
+##### 3D Visual of clusters
+```{r}
+
+p <- plot_ly(adapt_clusters_long, x=~.tsne1, y=~.tsne2, 
+z=~expression, color=~.flowsom_metacluster) 
+# %>%
+#      add_markers(size=1.5)
+print(p)
+
+```
+
 ##### Step 7: Differntial discovery analysis
 
 #### Calculating Cluster Proportions
@@ -551,4 +574,4 @@ adapt_clusters_cd19_neg_tsne |>
         threshold = 0.01
     )
 ```
-Here is the reference manual for additional information: [tidytof:A user-friendly framework for interactive and reproducible cytometry data analysis]   (https://keyes-timothy.github.io/tidytof/articles/modeling.html) 
+Here is the reference manual for additional information: [tidytof:A user-friendly framework for interactive and reproducible cytometry data analysis] (https://keyes-timothy.github.io/tidytof/articles/modeling.html) 
