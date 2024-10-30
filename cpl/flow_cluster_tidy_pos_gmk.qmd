@@ -297,6 +297,9 @@ colours = colorRampPalette((brewer.pal(n = 9, name = "Spectral")))(50)) +
 ```
 ##### Plot by Cluster with Labels
 ```{r}
+#| fig-height: 30
+#| fig-width: 30
+#| 
 clust_cols <- c("cd19", "cd20", "cd38", "cxcr3", "ig_m", "ig_d", "cd21", "cd34", 
                 "cd24", "cd27", "cxcr4", "cxcr5", "cd138", "cd11c", "bcma")
 
@@ -375,6 +378,17 @@ adapt_clusters_cd19_pos_tsne |>
         central_tendency_function = mean
     )
 ```
+##### Calculating the Proportion of Cells with Marker Expression Above A Threshold
+```{r}
+adapt_clusters_cd19_pos_tsne |>
+    tof_extract_threshold(
+        cluster_col = .flowsom_metacluster,
+        group_cols = visit,
+        marker_cols = any_of(clust_cols),
+        threshold = 0.05
+    )
+```
+
 
 ### Negative 
 #### Clustering and Dimensionality Reduction
@@ -527,4 +541,14 @@ adapt_clusters_cd19_neg_tsne |>
         central_tendency_function = mean
     )
 ```
-
+#### Calculating the Proportion of Cells with Marker Expression Above A Threshold
+```{r}
+adapt_clusters_cd19_neg_tsne |>
+    tof_extract_threshold(
+        cluster_col = .flowsom_metacluster,
+        group_cols = visit,
+        marker_cols = any_of(clust_cols_neg),
+        threshold = 0.01
+    )
+```
+Here is the reference manual for additional information: [tidytof:A user-friendly framework for interactive and reproducible cytometry data analysis]   (https://keyes-timothy.github.io/tidytof/articles/modeling.html) 
