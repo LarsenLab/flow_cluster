@@ -177,7 +177,7 @@ bcr_flowset = read.ncdfFlowSet(fcs_files, emptyValue = FALSE)
 #### Reading data with `tof_read_data`
 
 ```{r}
-bcr_flowset <- HDCytoData::Bodenmiller_BCR_XL_flowSet()
+# bcr_flowset <- HDCytoData::Bodenmiller_BCR_XL_flowSet()
 
 
 
@@ -295,7 +295,8 @@ clust <- c("cd19", "cd20", "cxcr3", "cd21", "cd38", "cd138" )
 
 
 flowsom_clust <- obj_tbl_tof |>
-    tof_cluster(method = "flowsom",cluster_cols = clust, 
+    tof_cluster(method = "flowsom",
+                cluster_cols = clust, 
                 num_metaclusters = 15,
                 augment = T) 
 
