@@ -34,7 +34,7 @@ library(readxl)
 library(cowplot)
 library(ggplot2)
 library(stringr)
-library(plot_ly)
+library(plotly)
 # remotes::install_github("mojaveazure/seurat-disk")
 
 library(RColorBrewer)
