@@ -353,6 +353,28 @@ ggplot(adapt_clusters_long, aes(x = .tsne1, y = .tsne2, color = .flowsom_metaclu
   theme(aspect.ratio = 0.50) +
     guides(color = "none")
 ```
+##### Step 7: Differntial discovery analysis
+
+##### Calculating Cluster Proportions
+```{r}
+adapt_clusters_cd19_pos_tsne  |>
+    tof_extract_proportion(
+        cluster_col = .flowsom_metacluster,
+        group_cols = visit,
+        format = "long"
+    ) 
+```
+##### Calculating Cluster Marker Expression
+
+```{r}
+adapt_clusters_cd19_pos_tsne |>
+    tof_extract_central_tendency(
+        cluster_col = .flowsom_metacluster,
+        group_cols = visit,
+        marker_cols = any_of(clust_cols),
+        central_tendency_function = mean
+    )
+```
 
 ### Negative 
 #### Clustering and Dimensionality Reduction
@@ -483,5 +505,26 @@ ggplot(adapt_clusters_long, aes(x = .tsne1, y = .tsne2, color = .flowsom_metaclu
   theme(aspect.ratio = 0.50) +
     guides(color = "none")
 ```
+##### Step 7: Differntial discovery analysis
 
+#### Calculating Cluster Proportions
+```{r}
+adapt_clusters_cd19_neg_tsne  |>
+    tof_extract_proportion(
+        cluster_col = .flowsom_metacluster,
+        group_cols = visit,
+        format = "long"
+    ) 
+```
+#### Calculating Cluster Marker Expression
+
+```{r}
+adapt_clusters_cd19_neg_tsne |>
+    tof_extract_central_tendency(
+        cluster_col = .flowsom_metacluster,
+        group_cols = visit,
+        marker_cols = any_of(clust_cols_neg),
+        central_tendency_function = mean
+    )
+```
 
