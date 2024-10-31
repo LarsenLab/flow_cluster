@@ -27,19 +27,15 @@ output:
 
 ### Steps
 
-Step 1: Read .fcs Files
-Load .fcs files using read.flowSet() from the flowCore package to handle flow cytometry data.
+Step 1: Read .fcs Files Load .fcs files using read.flowSet() from the flowCore package to handle flow cytometry data.
 
 Step 2: Arcsinh Transformation for Normalization.Normalize the data using an Arcsinh transformation, a common approach for cytometry data. \[<https://support.cytobank.org/hc/en-us/articles/206148057-About-the-Arcsinh-transform>\]
 
-Step 3: Create a Seurat Object
-Using the normalized counts, create a Seurat object to prepare for downstream analysis, including clustering and dimensionality reduction.
+Step 3: Create a Seurat Object Using the normalized counts, create a Seurat object to prepare for downstream analysis, including clustering and dimensionality reduction.
 
-Step 4: Dimensionality Reduction, Clustering, and Visualization
-Run dimensionality reduction methods (e.g., t-SNE or UMAP) and clustering algorithms to visualize the cell data.
+Step 4: Dimensionality Reduction, Clustering, and Visualization Run dimensionality reduction methods (e.g., t-SNE or UMAP) and clustering algorithms to visualize the cell data.
 
-Step 5: Integrate Seurat Objects
-Integrate multiple Seurat objects to understand similarities and differences among cell types. Additional resources for file format handling:[mojaveazure/seurat-disk: Interfaces for HDF5-based Single Cell File Formats (github.com)](https://github.com/mojaveazure/seurat-disk)
+Step 5: Integrate Seurat Objects Integrate multiple Seurat objects to understand similarities and differences among cell types. Additional resources for file format handling:[mojaveazure/seurat-disk: Interfaces for HDF5-based Single Cell File Formats (github.com)](https://github.com/mojaveazure/seurat-disk)
 
 ### Additional resources
 
@@ -111,8 +107,6 @@ font_add("Avenir", "~/Library/Fonts/Avenir.ttf") # path to your Avenir.ttf file
 
 ```
 
-
-
 ```{r}
 # if (!require(devtools)) install.packages("devtools")
 # devtools::install_github("keyes-timothy/tidytof")
@@ -170,6 +164,7 @@ tmp_theme = theme(
 ### Workflow
 
 #### Loading and Preprocessing Data
+
 ##### Step 1: Load FCS Files
 
 ```{r include=FALSE, warning=FALSE}
@@ -198,17 +193,18 @@ channel_cols <- adapt %>%
 
 # Now apply tof_preprocess with the defined channel columns
 adapt <- adapt |>
-  tof_preprocess(
-    channel_cols = all_of(channel_cols),  # Use the selected column names
-    transform_fun = scale
+  tof_preprocess(# Use the selected column names
+    channel_cols = all_of(channel_cols),
+    transform_fun = function(x) asinh(x / 150),  
   ) |>
   tof_preprocess(
-    transform_fun = function(x) asinh(x / 150)
+
+    transform_fun = scale
   )
 
 ```
 
-##### Step 4: Create Sample Metadata Variables 
+##### Step 4: Create Sample Metadata Variables
 
 ```{r}
 adapt <- adapt |> 
@@ -225,8 +221,11 @@ adapt <- adapt |>
 ```
 
 ### Positive
+
 #### Clustering and Dimensionality Reduction
-##### Step 5: Cluster Cells 
+
+##### Step 5: Cluster Cells
+
 We are using this method to generate an elbow plot to help estimate the optimal number of clusters. While the results may not be highly informative on their own, combining this approach with visual inspection and foundational biological insights can help finalize the clustering results. Additional details are available here: [Elbow Method in R](https://www.statology.org/elbow-method-in-r/).
 
 ```{r}
@@ -262,6 +261,7 @@ adapt_clusters_cd19_pos_tsne <- adapt_clusters_cd19_pos |>
 ```
 
 ### Visualization
+
 #### Plotting Clusters and Expression Levels
 
 ```{r}
@@ -298,7 +298,9 @@ colours = colorRampPalette((brewer.pal(n = 9, name = "Spectral")))(50)) +
   tmp_theme + 
   theme(aspect.ratio = 1) 
 ```
+
 ##### Plot by Cluster with Labels
+
 ```{r}
 clust_cols <- c("cd19", "cd20", "cd38", "cxcr3", "ig_m", "ig_d", "cd21", "cd34", 
                 "cd24", "cd27", "cxcr4", "cxcr5", "cd138", "cd11c", "bcma")
@@ -327,7 +329,8 @@ colours = colorRampPalette((brewer.pal(n = 9, name = "Spectral")))(50)) +
 
 ```
 
-##### Expression by Marker 
+##### Expression by Marker
+
 ```{r}
 cluster_labels <- adapt_clusters_long |>
   group_by(marker, .flowsom_metacluster) |>
@@ -356,7 +359,9 @@ ggplot(adapt_clusters_long, aes(x = .tsne1, y = .tsne2, color = .flowsom_metaclu
   theme(aspect.ratio = 0.50) +
     guides(color = "none")
 ```
+
 ##### 3D Visual of clusters
+
 ```{r}
 
 p <- plot_ly(adapt_clusters_long, x=~.tsne1, y=~.tsne2, 
@@ -370,6 +375,7 @@ print(p)
 ##### Step 7: Differntial discovery analysis
 
 ##### Calculating Cluster Proportions
+
 ```{r}
 adapt_clusters_cd19_pos_tsne  |>
     tof_extract_proportion(
@@ -378,6 +384,7 @@ adapt_clusters_cd19_pos_tsne  |>
         format = "long"
     ) 
 ```
+
 ##### Calculating Cluster Marker Expression
 
 ```{r}
@@ -389,7 +396,9 @@ adapt_clusters_cd19_pos_tsne |>
         central_tendency_function = mean
     )
 ```
+
 ##### Calculating the Proportion of Cells with Marker Expression Above A Threshold
+
 ```{r}
 adapt_clusters_cd19_pos_tsne |>
     tof_extract_threshold(
@@ -400,10 +409,12 @@ adapt_clusters_cd19_pos_tsne |>
     )
 ```
 
+### Negative
 
-### Negative 
 #### Clustering and Dimensionality Reduction
+
 ##### Step 5: Cluster Cells
+
 ```{r}
 df_neg <- adapt |>
   sample_frac(0.1) |>     
@@ -435,6 +446,7 @@ adapt_clusters_cd19_neg_tsne <- adapt_clusters_cd19_neg |>
 ```
 
 ### Visualization
+
 #### Plotting Clusters and Expression Levels
 
 ```{r}
@@ -502,7 +514,8 @@ colours = colorRampPalette((brewer.pal(n = 11, name = "Spectral")))(50)) +
 
 ```
 
-#### Expression by Marker 
+#### Expression by Marker
+
 ```{r}
 cluster_labels <- adapt_clusters_long |>
   group_by(marker, .flowsom_metacluster) |>
@@ -531,7 +544,9 @@ ggplot(adapt_clusters_long, aes(x = .tsne1, y = .tsne2, color = .flowsom_metaclu
   theme(aspect.ratio = 0.50) +
     guides(color = "none")
 ```
+
 ##### 3D Visual of clusters
+
 ```{r}
 
 p <- plot_ly(adapt_clusters_long, x=~.tsne1, y=~.tsne2, 
@@ -545,6 +560,7 @@ print(p)
 ##### Step 7: Differntial discovery analysis
 
 #### Calculating Cluster Proportions
+
 ```{r}
 adapt_clusters_cd19_neg_tsne  |>
     tof_extract_proportion(
@@ -553,6 +569,7 @@ adapt_clusters_cd19_neg_tsne  |>
         format = "long"
     ) 
 ```
+
 #### Calculating Cluster Marker Expression
 
 ```{r}
@@ -564,7 +581,9 @@ adapt_clusters_cd19_neg_tsne |>
         central_tendency_function = mean
     )
 ```
+
 #### Calculating the Proportion of Cells with Marker Expression Above A Threshold
+
 ```{r}
 adapt_clusters_cd19_neg_tsne |>
     tof_extract_threshold(
@@ -574,4 +593,5 @@ adapt_clusters_cd19_neg_tsne |>
         threshold = 0.01
     )
 ```
-Here is the reference manual for additional information: [tidytof:A user-friendly framework for interactive and reproducible cytometry data analysis] (https://keyes-timothy.github.io/tidytof/articles/modeling.html) 
+
+Here is the reference manual for additional information: \[tidytof:A user-friendly framework for interactive and reproducible cytometry data analysis\] (https://keyes-timothy.github.io/tidytof/articles/modeling.html)
