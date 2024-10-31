@@ -534,8 +534,11 @@ ggplot(adapt_clusters_long, aes(x = .tsne1, y = .tsne2, color = .flowsom_metaclu
 ##### 3D Visual of clusters
 ```{r}
 
-p <- plot_ly(adapt_clusters_long, x=~.tsne1, y=~.tsne2, 
-z=~expression, color=~.flowsom_metacluster) 
+p <- plot_ly(adapt_clusters_long, 
+             x=~.tsne1, 
+             y=~.tsne2, 
+             z=~expression, 
+         color=~.flowsom_metacluster) 
 # %>%
 #      add_markers(size=1.5)
 print(p)
@@ -575,3 +578,119 @@ adapt_clusters_cd19_neg_tsne |>
     )
 ```
 Here is the reference manual for additional information: [tidytof:A user-friendly framework for interactive and reproducible cytometry data analysis] (https://keyes-timothy.github.io/tidytof/articles/modeling.html) 
+
+```{r}
+adapt_clusters_cd19_neg_umap <- adapt_clusters_cd19_neg |>
+    tof_downsample(method = "constant", group_cols = visit, num_cells = 1000) |>
+    tof_reduce_dimensions(method = "umap",
+                          num_comp = 3)
+```
+
+### Visualization
+#### Plotting Clusters and Expression Levels
+
+```{r}
+# Calculate the number of unique clusters in the .flowsom_metacluster column
+num_clusters <- length(unique(adapt_clusters_cd19_neg_umap$.flowsom_metacluster))
+
+# Ensure color palette has enough colors
+adapt_clusters_cd19_neg_umap |>
+  ggplot(aes(x = .umap1, y = .umap2, color = .flowsom_metacluster)) +
+  geom_point() +
+  theme_bw() +
+  labs(fill = NULL) + 
+  scale_color_manual(values = colorRampPalette(brewer.pal(n = min(11, num_clusters), name = "Spectral"))(num_clusters)) +
+  tmp_theme + 
+  theme(aspect.ratio = 1) + 
+  guides(color = "none")
+
+adapt_clusters_cd19_neg_umap |>
+  ggplot(aes(x = .umap1, y = .umap2, color = as.factor(.flowsom_metacluster))) +  # Convert to factor if discrete
+  geom_point() +
+  theme_bw() +
+  labs(fill = NULL) +
+  facet_wrap(~ visit) +
+  scale_color_manual(values = colorRampPalette(brewer.pal(n = min(11, num_clusters), name = "Spectral"))(num_clusters)) +
+  tmp_theme +
+  theme(aspect.ratio = 1)  + 
+  guides(color = "none")
+
+
+adapt_clusters_cd19_neg_umap |>
+    ggplot(aes(x = .umap1, y = .umap2, color = cd38)) +
+    geom_point() +
+    theme_bw() +
+    labs(fill = NULL) +
+    facet_wrap(~ visit) + 
+scale_color_gradientn(values = c(1, 0), na.value = "darkred",
+colours = colorRampPalette((brewer.pal(n = 10, name = "Spectral")))(50)) +
+  tmp_theme + 
+  theme(aspect.ratio = 1) 
+```
+
+```{r}
+
+adapt_clusters_long <- adapt_clusters_cd19_neg_umap |>
+  select(all_of(clust_cols_neg),.flowsom_metacluster:.umap2,visit)|>
+  pivot_longer(cols=all_of(clust_cols_neg),names_to = "marker", values_to = "expression")|> 
+    mutate(.flowsom_metacluster = as.factor(.flowsom_metacluster),
+           marker = as.factor(marker),
+           visit=as.factor(visit)) 
+    
+
+
+ggplot(adapt_clusters_long, aes(x = .umap1, y = .umap2, color = expression)) +
+  geom_point() +
+  theme_bw() +
+  scale_color_gradientn(values = c(1, 0), na.value = "darkred",
+colours = colorRampPalette((brewer.pal(n = 11, name = "Spectral")))(50)) +
+  facet_wrap(~ marker, scales = "free") +
+  labs(color = "Expression",
+       title="CD19 Neg Bone Marrow B cell Lineage",
+       subtitle = "Marker Expression") +
+  theme(aspect.ratio = 0.5) +
+    guides(color = "none")
+
+
+```
+
+#### Expression by Marker 
+```{r}
+cluster_labels <- adapt_clusters_long |>
+  group_by(marker, .flowsom_metacluster) |>
+  summarise(
+    label_x = median(.umap1, na.rm = TRUE),
+    label_y = median(.umap2, na.rm = TRUE),
+    .groups = 'drop'
+  )
+
+
+ggplot(adapt_clusters_long, aes(x = .umap1, y = .umap2, color = .flowsom_metacluster)) +
+  geom_point() +  
+  #facet_wrap(~ marker, scales = "free") +
+  geom_text(
+    data = cluster_labels,
+    aes(x = label_x, y = label_y, label = .flowsom_metacluster),
+    color = "black",  
+    size = 3,
+    vjust = -0.5
+  ) +
+  theme_bw() +
+  labs(title="CD19 Neg Bone Marrow B cell Lineage")+
+  scale_color_manual(values = colorRampPalette(brewer.pal(n = min(11, num_clusters), name = "Spectral"))(num_clusters)) +
+  #scale_alpha_continuous(range = c(0.2, 1)) +  # Broaden alpha range for better brightness contrast
+  #labs(color = "Cluster", alpha = "Expression") +
+  theme(aspect.ratio = 0.50) +
+    guides(color = "none")
+```
+
+##### 3D Visual of clusters
+```{r}
+
+p <- plot_ly(adapt_clusters_long, x=~.umap1, y=~.umap2, 
+z=~expression, color=~.flowsom_metacluster) 
+# %>%
+#      add_markers(size=1.5)
+print(p)
+
+```
