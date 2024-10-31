@@ -195,7 +195,7 @@ channel_cols <- adapt %>%
 adapt <- adapt |>
   tof_preprocess(# Use the selected column names
     channel_cols = all_of(channel_cols),
-    transform_fun = function(x) asinh(x / 150),  
+    transform_fun = function(x) asinh(x / 150)
   ) |>
   tof_preprocess(
 
@@ -247,7 +247,8 @@ set.seed(123)
 clust_cols <- c("cd19", "cd20", "cd38", "cxcr3", "ig_m", "ig_d", "cd21", "cd34", "cd24", "cd27", "cxcr4", "cxcr5", "cd138", "cd11c", "bcma")
 
 adapt_clusters_cd19_pos <- adapt |> filter(population == "CD19+") |>
-    tof_cluster(method = "flowsom", cluster_cols = all_of(clust_cols), 
+    tof_cluster(method = "flowsom", 
+                cluster_cols = all_of(clust_cols), 
                 num_metaclusters = 8)
 
 ```
@@ -255,9 +256,20 @@ adapt_clusters_cd19_pos <- adapt |> filter(population == "CD19+") |>
 ##### Step 6: Downsample and Reduce Dimensions (t-SNE)
 
 ```{r}
-adapt_clusters_cd19_pos_tsne <- adapt_clusters_cd19_pos |>
-    tof_downsample(method = "constant", group_cols = visit, num_cells = 1000) |>
-    tof_reduce_dimensions(method = "tsne")
+
+adapt_clusters_cd19_pos_down <- adapt_clusters_cd19_pos |>
+    tof_downsample(method = "constant", group_cols = visit, num_cells = 1000) 
+
+adapt_clusters_cd19_pos_tsne <- adapt_clusters_cd19_pos_down |>
+    tof_reduce_tsne(num_comp = 3)
+
+adapt_clusters_cd19_pos_full <- adapt_clusters_cd19_pos_down |> 
+    bind_cols(adapt_clusters_cd19_pos_tsne)
+
+adapt_clusters_cd19_pos_tsne <- adapt_clusters_cd19_pos_full
+# 
+# 
+#     tof_reduce_dimensions(method = "tsne")
 ```
 
 ### Visualization
@@ -364,8 +376,8 @@ ggplot(adapt_clusters_long, aes(x = .tsne1, y = .tsne2, color = .flowsom_metaclu
 
 ```{r}
 
-p <- plot_ly(adapt_clusters_long, x=~.tsne1, y=~.tsne2, 
-z=~expression, color=~.flowsom_metacluster) 
+p <- plot_ly(adapt_clusters_cd19_pos_tsne, x=~.tsne1, y=~.tsne2, 
+z=~.tsne3, color=~.flowsom_metacluster) 
 # %>%
 #      add_markers(size=1.5)
 print(p)
@@ -596,8 +608,8 @@ adapt_clusters_cd19_neg_tsne |>
         threshold = 0.01
     )
 ```
-<<<<<<< HEAD
-Here is the reference manual for additional information: [tidytof:A user-friendly framework for interactive and reproducible cytometry data analysis] (https://keyes-timothy.github.io/tidytof/articles/modeling.html) 
+
+\<\<\<\<\<\<\< HEAD Here is the reference manual for additional information: \[tidytof:A user-friendly framework for interactive and reproducible cytometry data analysis\] (https://keyes-timothy.github.io/tidytof/articles/modeling.html)
 
 ```{r}
 adapt_clusters_cd19_neg_umap <- adapt_clusters_cd19_neg |>
@@ -607,6 +619,7 @@ adapt_clusters_cd19_neg_umap <- adapt_clusters_cd19_neg |>
 ```
 
 ### Visualization
+
 #### Plotting Clusters and Expression Levels
 
 ```{r}
@@ -674,7 +687,8 @@ colours = colorRampPalette((brewer.pal(n = 11, name = "Spectral")))(50)) +
 
 ```
 
-#### Expression by Marker 
+#### Expression by Marker
+
 ```{r}
 cluster_labels <- adapt_clusters_long |>
   group_by(marker, .flowsom_metacluster) |>
@@ -705,6 +719,7 @@ ggplot(adapt_clusters_long, aes(x = .umap1, y = .umap2, color = .flowsom_metaclu
 ```
 
 ##### 3D Visual of clusters
+
 ```{r}
 
 p <- plot_ly(adapt_clusters_long, x=~.umap1, y=~.umap2, 
@@ -715,6 +730,4 @@ print(p)
 
 ```
 
-
 Here is the reference manual for additional information: \[tidytof:A user-friendly framework for interactive and reproducible cytometry data analysis\] (https://keyes-timothy.github.io/tidytof/articles/modeling.html)
-
