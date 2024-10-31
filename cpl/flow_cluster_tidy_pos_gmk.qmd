@@ -236,10 +236,22 @@ df_pos <- adapt |>
   drop_na() |>
   select(where(is.numeric))  
 
+fviz_nbclust(df_pos, pam, method = "wss", k.max = 10,
+  nboot = 100) +
+  ggtitle("Elbow Plot for Optimal Number of Clusters") +
+  theme_minimal()
+
 fviz_nbclust(df_pos, kmeans, method = "wss", k.max = 10,
   nboot = 100) +
   ggtitle("Elbow Plot for Optimal Number of Clusters") +
   theme_minimal()
+
+fviz_nbclust(df_pos, clara, method = "wss", k.max = 10,
+  nboot = 100) +
+  ggtitle("Elbow Plot for Optimal Number of Clusters") +
+  theme_minimal()
+
+
 ```
 
 ```{r}
