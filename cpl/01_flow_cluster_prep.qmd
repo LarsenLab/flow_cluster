@@ -1,5 +1,5 @@
 ---
-title: "Workflow to analyze Flow Cytometry Data"
+title: "Workflow to prepare Flow Cytometry Data"
 author: "Geeta Karadkhele & Chris Larsen"
 html:
     self-contained: true
@@ -163,20 +163,84 @@ tmp_theme = theme(
 
 ### Workflow
 
-##### Step 1: Import processed data
-Source: 01_flow_cluster_prep.qmd
+#### Loading and Preprocessing Data
+
+##### Step 1: Load and Read FCS Data with tidytof
+
+```{r include=FALSE, warning=FALSE}
+input_dir <- here("raw/ITN089ST_adapt")
+```
+
+```{r include=FALSE, warning=FALSE}
+adapt <- tof_read_data(input_dir) |> 
+    clean_names() 
+
+```
+
+##### Step 2: Create Sample Metadata Variables
+
+```{r}
+adapt <- adapt |> 
+    mutate(sample_id = str_remove(file_name, "\\.fcs")) |> 
+    mutate(sample_id = str_remove(sample_id, "export_"))  |> 
+    mutate(population = str_extract(sample_id, "CD19."))  |> 
+   mutate(sample_id = str_remove(sample_id, "_B_cell Panel_BM_CD19-")) |> 
+    mutate(time_point = str_extract(file_name, "V\\w+")) |> 
+    mutate(visit = str_extract(time_point, "V\\w{0,2}(?=_)"))  |> 
+    rename_with(~ str_remove(., "_fj_comp_.+")) |>
+    rename_with(~ str_remove(., "\\|.+")) |> 
+    rename_with(~ str_replace(., "-", "_")) |> 
+    rename_with(str_to_lower)
+```
+
+##### Step 3: Prepare and process data
+
+-   Identify the markers of interests
+
+-   Transform with asinh (cofactor =150 for flow and 5 for cytof )
+
+-   Scale (validate if it includes centering too)
+
+```{r}
+# Define channel columns first
+channel_cols <- adapt %>%
+  select(where(is.numeric), matches("cd19|cd20|cd38|cxcr3|ig_m|ig_d|cd21|cd34|cd24|cd27|cxcr4|cxcr5|cd138|cd11c|bcma")) |> 
+    names()
+
+# Now apply tof_preprocess with the defined channel columns
+adapt <- adapt |>
+  tof_preprocess(
+    channel_cols = all_of(channel_cols),
+    transform_fun = function(x) asinh(x / 150)
+  ) |>
+  tof_preprocess(
+
+    transform_fun = scale
+  )
+
+```
+
+##### Step 4: Export processed data
+
+```{r}
+my_path <- file.path("~", "Desktop", "tidytof_vignette_files")
+
+write_rds(adapt,"data/proc/adapt.rds")
+
+write_rds(channel_cols, "data/proc/channel_cols.rds")
+```
 
 ```{r}
 adapt <- read_rds("data/proc/adapt.rds")
 
-channel_cols <- read_rds("data/proc/channel_cols.rds")
+
 ```
 
 ### Positive
 
 #### Clustering and Dimensionality Reduction
 
-##### Step 2: Cluster Cells
+##### Step 5: Cluster Cells
 
 We are using this method to generate an elbow plot to help estimate the optimal number of clusters. While the results may not be highly informative on their own, combining this approach with visual inspection and foundational biological insights can help finalize the clustering results. Additional details are available here: [Elbow Method in R](https://www.statology.org/elbow-method-in-r/).
 
@@ -220,7 +284,7 @@ adapt_clusters_cd19_pos <- adapt |> filter(population == "CD19+") |>
 
 ```
 
-##### Step 3: Downsample and Reduce Dimensions (t-SNE)
+##### Step 6: Downsample and Reduce Dimensions (t-SNE)
 
 ```{r}
 
@@ -351,7 +415,7 @@ print(p)
 
 ```
 
-##### Step 4: Differntial discovery analysis
+##### Step 7: Differntial discovery analysis
 
 ##### Calculating Cluster Proportions
 
@@ -392,7 +456,7 @@ adapt_clusters_cd19_pos_tsne |>
 
 #### Clustering and Dimensionality Reduction
 
-##### Step 2: Cluster Cells
+##### Step 5: Cluster Cells
 
 ```{r}
 df_neg <- adapt |>
@@ -429,7 +493,7 @@ adapt_clusters_cd19_neg <- adapt |> filter(population == "CD19-") |>
     tof_cluster(method = "flowsom", cluster_cols = all_of(clust_cols_neg), num_metaclusters = 10) 
 ```
 
-##### Step 3: Downsample and Reduce Dimensions (t-SNE)
+##### Step 6: Downsample and Reduce Dimensions (t-SNE)
 
 ```{r}
 adapt_clusters_cd19_neg_down <- adapt_clusters_cd19_neg |>
@@ -558,7 +622,7 @@ print(p)
 
 ```
 
-##### Step 4: Differntial discovery analysis
+##### Step 7: Differntial discovery analysis
 
 #### Calculating Cluster Proportions
 
