@@ -1,0 +1,323 @@
+---
+title: "Workflow to assess the qulity of Flow Cytometry Data"
+author: "Geeta Karadkhele & Chris Larsen"
+html:
+    self-contained: true
+    code-fold: true
+    code-link: true
+    toc: true
+    toc-location: left
+    link-external-newwindow: true
+    link-external-icon: true
+    fig-cap-location: top
+    theme: navbars #navbars for not dark mode
+execute:
+  echo: true
+editor: visual
+output:
+  html_notebook:
+    code_folding: hide
+    toc: yes
+    toc_depth: 6
+    toc_float: yes    
+  html_document:
+    toc: yes
+    toc_depth: 6
+---
+
+### Steps
+
+Step 1: Read .fcs Files Load .fcs files using read.flowSet() from the flowCore package to handle flow cytometry data.
+
+Step 2: Arcsinh Transformation for Normalization.Normalize the data using an Arcsinh transformation, a common approach for cytometry data. \[<https://support.cytobank.org/hc/en-us/articles/206148057-About-the-Arcsinh-transform>\]
+
+Step 3: Create a Seurat Object Using the normalized counts, create a Seurat object to prepare for downstream analysis, including clustering and dimensionality reduction.
+
+Step 4: Dimensionality Reduction, Clustering, and Visualization Run dimensionality reduction methods (e.g., t-SNE or UMAP) and clustering algorithms to visualize the cell data.
+
+Step 5: Integrate Seurat Objects Integrate multiple Seurat objects to understand similarities and differences among cell types. Additional resources for file format handling:[mojaveazure/seurat-disk: Interfaces for HDF5-based Single Cell File Formats (github.com)](https://github.com/mojaveazure/seurat-disk)
+
+### Additional resources
+
+<https://github.com/keyes-timothy/tidytof>
+
+<https://stemangiola.github.io/tidyseurat/>
+
+### library
+
+```{r include=FALSE, warning=FALSE}
+# 
+# if (!require("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+#BiocManager::install(version = "3.19")
+#BiocManager::install("HDCytoData")
+library(HDCytoData)
+#BiocManager::install(c("flowCore","ncdfFlow","flowWorkspace","Seurat"))
+library(flowCore)
+library(ncdfFlow)
+library(flowWorkspace)
+library(Seurat)
+library(tidytof)
+library(tidyFlowCore)
+library(tidyseurat)
+library(FlowSOM)
+# if (!require(devtools)) install.packages("devtools")
+# BiocManager::install("keyes-timothy/tidyFlowCore")
+library(tidyFlowCore)
+library(readxl)
+library(cowplot)
+library(ggplot2)
+library(stringr)
+library(plotly)
+# remotes::install_github("mojaveazure/seurat-disk")
+
+library(RColorBrewer)
+library(pheatmap)
+library(ggpubr)
+library(ggsignif)
+library(Polychrome)
+library(gridExtra)
+
+
+
+library(tidyverse)
+library(janitor)
+library(reshape2)
+library(matrixStats)
+library(rstatix)
+library(here)
+library(embed)
+library(cluster)
+library(factoextra)
+
+
+
+source(here("source_func.R"))
+
+# aesthetics
+
+library(showtext)
+library(sysfonts)
+font_add("Avenir", "~/Library/Fonts/Avenir.ttf") # path to your Avenir.ttf file
+# download Avenir-Book.ttf from https://github.com/platanus/fonts/blob/master/Avenir/Avenir-Book.ttf
+# rename it as "Avenir.ttf" & put it under "/Users/weiwen_zhang/Library/Fonts"
+
+
+
+
+```
+
+```{r}
+# if (!require(devtools)) install.packages("devtools")
+# devtools::install_github("keyes-timothy/tidytof")
+
+
+```
+
+```{r}
+# if (!require(devtools)) install.packages("devtools")
+# if (!requireNamespace("BiocManager", quietly = TRUE)) {
+#     install.packages("BiocManager")
+# }
+# 
+# 
+#BiocManager::install("tidyseurat")
+# BiocManager::install("keyes-timothy/tidyFlowCore")
+
+```
+
+### Font and Theme Settings
+
+```{r include=FALSE, warning=FALSE}
+# initialize showtext
+showtext_auto()
+
+size = 10
+tmp_theme = theme(
+    
+    text = element_text(size = size, family = "Avenir"),
+    # y
+    axis.title.y = element_text(size = size),
+    axis.text.y = element_text(size = size),
+    axis.ticks.y = element_line(size = 0.2, linetype = "solid", colour = "black"),
+    axis.line.y = element_line(size = 0.4, linetype = "solid", colour = "black"),
+    
+    # x
+    axis.title.x = element_text(size = size),
+    axis.text.x = element_text(size = size),
+    axis.ticks.x = element_line(size = 0.2, linetype = "solid", colour = "black"),
+    axis.line.x = element_line(size = 0.4, linetype = "solid", colour = "black"),
+    
+    # panel
+    panel.grid = element_blank(),  # remove background grid
+    panel.grid.major = element_blank(),  # remove major grid lines
+    panel.grid.minor = element_blank(),  # remove minor grid lines
+    panel.border = element_blank(),  # remove panel borders
+    panel.background = element_blank(),
+    
+    # facet
+    strip.background = element_rect(colour = "gray", fill = "white", linewidth = 0.5, linetype = "solid"), 
+    aspect.ratio = 1
+  )
+```
+
+### Workflow
+
+#### Step 1: Import processed data
+
+Source: 01_flow_cluster_prep.qmd
+
+```{r}
+adapt <- read_rds("data/proc/adapt.rds")
+
+channel_cols <- read_rds("data/proc/channel_cols.rds")
+```
+
+#### Step 2: Assess quality of the data
+
+##### A: Detect low-expression channels
+This step involves selecting channels for downstream analysis and filtering out those with very few positive values, as this may indicate that the antibody did not perform effectively.  
+
+```{r}
+# convert 150 counts to asinh value with a cofactor of 150
+threshold <- asinh(150 / 150)
+
+adapt |>
+    select(all_of(channel_cols)) |> 
+    tof_assess_channels(
+        negative_threshold = threshold,
+        negative_proportion_flag = 0.90
+    )
+```
+```{r}
+adapt |>
+    filter(ig_m > 0) |> 
+    tof_plot_cells_density(marker_col = ig_m) 
+    
+```
+It looks like a small population of cells is slightly positive for ig_m, but this could simply be measurement noise/nonspecific binding of the antibody. It would be up to user whether or not to include ig_m in downstream analyses.
+
+```{r}
+adapt |>
+    tof_assess_flow_rate(
+        time_col = time,
+        num_timesteps = 200,
+        # flag timepoints in which flow rates are high or low at a signicance level
+        # of p = 0.01
+        alpha_threshold = 0.09,
+        # plot the number of cells in each timestep, and whether or not the
+        # rates were flagged as too high or too low
+        visualize = TRUE
+    )
+```
+
+In the result above, we can see that the last several timesteps have been flagged as having potentially high flow rates. The decision to include or exclude these cells from further analyses is left to the user.
+@cpl - Could you clarify which column represents the timestamp and its significance? Additionally, could you explain how high or low flow rates affect the cells? Lastly, what is the typical range for the number of cells processed in flow cytometry?
+
+I’ve observed that as the x-axis increases, the number of cells on the y-axis decreases. Does this suggest that the number of cells decreases over time during flow?
+
+```{r}
+adapt |>
+    tof_assess_flow_rate(
+        time_col = time,
+        group_cols = visit,
+        # flag timepoints in which flow rates are high or low at a signicance level
+        # of p = 0.01
+        alpha_threshold = 0.01,
+        # plot the number of cells in each timestep, and whether or not the
+        # rates were flagged as too high or too low
+        visualize = TRUE
+    )
+```
+
+##### B: Flag cells that are unusally far from the centroid of a cluster
+
+```{r}
+clust_cols <- c("cd19", "cd20", "cd38", "cxcr3", "ig_m", "ig_d", "cd21", "cd34", "cd24", "cd27", "cxcr4", "cxcr5", "cd138", "cd11c", "bcma")
+
+adapt_clusters_cd19_pos <- adapt |> filter(population == "CD19+") |>
+    tof_cluster(method = "flowsom", 
+                cluster_cols = all_of(clust_cols), 
+                num_metaclusters = 8)
+```
+
+```{r}
+adapt_clusters_cd19_pos_down <- adapt_clusters_cd19_pos |>
+    tof_downsample(method = "constant", group_cols = visit, num_cells = 1000) 
+
+adapt_clusters_cd19_pos_tsne <- adapt_clusters_cd19_pos_down |>
+    tof_reduce_tsne(num_comp = 3)
+
+adapt_clusters_cd19_pos_full <- adapt_clusters_cd19_pos_down |> 
+    bind_cols(adapt_clusters_cd19_pos_tsne)
+
+adapt_clusters_cd19_pos_tsne <- adapt_clusters_cd19_pos_full
+```
+
+```{r}
+set.seed(2020L)
+
+entropy_result <-
+    adapt |> 
+    filter(population == "CD19+") |> 
+    # cluster into 2 clusters
+    tof_cluster(
+        num_clusters = 8,
+        method = "kmeans"
+    ) |>
+    # calculate the entropy of all cells
+    tof_assess_clusters_entropy(
+        cluster_col = .kmeans_cluster,
+        # marker_cols = starts_with("cd"),
+        entropy_quantile = 0.8,
+        augment = TRUE
+    )
+
+# plot the clusters in PCA space
+entropy_result |>
+    select(-starts_with(".mahala")) |>
+    tof_reduce_dimensions(pca_cols = clust_cols, method = "pca") |>
+    tof_plot_cells_embedding(embedding_cols = c(.pc1, .pc2), color_col = .kmeans_cluster)
+```
+
+```{r}
+
+# show the entropy values for each cell
+entropy_result |>
+    select(-starts_with(".mahala")) |>
+    tof_reduce_dimensions(pca_cols = clust_cols, method = "pca") |>
+    tof_plot_cells_embedding(embedding_cols = c(.pc1, .pc2), color_col = entropy) +
+    scale_fill_viridis_c()
+```
+we can see that, as expected, the intermediate cluster (in the middle) has higher entropies than rest of the more distinct clusters .
+
+```{r}
+entropy_result |>
+    ggplot(aes(x = entropy, fill = .kmeans_cluster)) +
+    geom_density(alpha = 0.4) +
+    theme_bw()
+```
+
+```{r}
+entropy_result  |>
+    mutate(.kmeans_cluster = fct_reorder(.kmeans_cluster, entropy)) |>
+    tof_plot_cells_density(
+        marker_col = entropy,
+        group_col = .kmeans_cluster,
+        use_ggridges = TRUE,
+        scale = 0.1
+    ) +
+    ggplot2::theme(legend.position = "none") +
+    ggplot2::labs(x = "Entropy", y = "Cluster ID")
+```
+
+```{r}
+entropy_result |>
+    mutate(flagged_cell = entropy > quantile(entropy, prob = 0.4)) |>
+    dplyr::count(.kmeans_cluster, flagged_cell) |>
+    group_by(.kmeans_cluster) |>
+    mutate(prop = n / sum(n)) |>
+    ungroup() |>
+    dplyr::filter(flagged_cell)
+```
+
