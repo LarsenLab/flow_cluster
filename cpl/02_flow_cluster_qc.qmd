@@ -176,7 +176,8 @@ channel_cols <- read_rds("data/proc/channel_cols.rds")
 #### Step 2: Assess quality of the data
 
 ##### A: Detect low-expression channels
-This step involves selecting channels for downstream analysis and filtering out those with very few positive values, as this may indicate that the antibody did not perform effectively.  
+
+This step involves selecting channels for downstream analysis and filtering out those with very few positive values, as this may indicate that the antibody did not perform effectively.
 
 ```{r}
 # convert 150 counts to asinh value with a cofactor of 150
@@ -189,12 +190,14 @@ adapt |>
         negative_proportion_flag = 0.90
     )
 ```
+
 ```{r}
 adapt |>
     filter(ig_m > 0) |> 
     tof_plot_cells_density(marker_col = ig_m) 
     
 ```
+
 It looks like a small population of cells is slightly positive for ig_m, but this could simply be measurement noise/nonspecific binding of the antibody. It would be up to user whether or not to include ig_m in downstream analyses.
 
 ```{r}
@@ -209,10 +212,11 @@ adapt |>
         # rates were flagged as too high or too low
         visualize = TRUE
     )
+
+
 ```
 
-In the result above, we can see that the last several timesteps have been flagged as having potentially high flow rates. The decision to include or exclude these cells from further analyses is left to the user.
-@cpl - Could you clarify which column represents the timestamp and its significance? Additionally, could you explain how high or low flow rates affect the cells? Lastly, what is the typical range for the number of cells processed in flow cytometry?
+In the result above, we can see that the last several timesteps have been flagged as having potentially high flow rates. The decision to include or exclude these cells from further analyses is left to the user. @cpl - Could you clarify which column represents the timestamp and its significance? Additionally, could you explain how high or low flow rates affect the cells? Lastly, what is the typical range for the number of cells processed in flow cytometry?
 
 I’ve observed that as the x-axis increases, the number of cells on the y-axis decreases. Does this suggest that the number of cells decreases over time during flow?
 
@@ -277,7 +281,8 @@ entropy_result <-
 entropy_result |>
     select(-starts_with(".mahala")) |>
     tof_reduce_dimensions(pca_cols = clust_cols, method = "pca") |>
-    tof_plot_cells_embedding(embedding_cols = c(.pc1, .pc2), color_col = .kmeans_cluster)
+    tof_plot_cells_embedding(embedding_cols = c(.pc1, .pc2), 
+                             color_col = .kmeans_cluster)
 ```
 
 ```{r}
@@ -289,6 +294,7 @@ entropy_result |>
     tof_plot_cells_embedding(embedding_cols = c(.pc1, .pc2), color_col = entropy) +
     scale_fill_viridis_c()
 ```
+
 we can see that, as expected, the intermediate cluster (in the middle) has higher entropies than rest of the more distinct clusters .
 
 ```{r}
@@ -320,4 +326,3 @@ entropy_result |>
     ungroup() |>
     dplyr::filter(flagged_cell)
 ```
-

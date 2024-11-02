@@ -462,7 +462,6 @@ adapt_clusters_cd19_neg_tsne <- adapt_clusters_cd19_neg_full
 
 ### Visualization
 
-
 #### Plotting Clusters and Expression Levels
 
 ```{r}
@@ -592,7 +591,6 @@ z=~.tsne3, color=~.flowsom_metacluster)
 print(p)
 
 ```
-
 
 ##### Step 4: Differntial discovery analysis
 
