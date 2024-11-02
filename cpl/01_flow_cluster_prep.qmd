@@ -223,7 +223,6 @@ adapt <- adapt |>
 ##### Step 4: Export processed data
 
 ```{r}
-my_path <- file.path("~", "Desktop", "tidytof_vignette_files")
 
 write_rds(adapt,"data/proc/adapt.rds")
 
