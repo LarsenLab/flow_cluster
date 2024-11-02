@@ -101,10 +101,6 @@ library(sysfonts)
 font_add("Avenir", "~/Library/Fonts/Avenir.ttf") # path to your Avenir.ttf file
 # download Avenir-Book.ttf from https://github.com/platanus/fonts/blob/master/Avenir/Avenir-Book.ttf
 # rename it as "Avenir.ttf" & put it under "/Users/weiwen_zhang/Library/Fonts"
-
-
-
-
 ```
 
 ```{r}
@@ -164,12 +160,14 @@ tmp_theme = theme(
 ### Workflow
 
 ##### Step 1: Import processed data
+
 Source: 01_flow_cluster_prep.qmd
 
 ```{r}
 adapt <- read_rds("data/proc/adapt.rds")
 
 channel_cols <- read_rds("data/proc/channel_cols.rds")
+
 ```
 
 ### Positive
@@ -225,7 +223,9 @@ adapt_clusters_cd19_pos <- adapt |> filter(population == "CD19+") |>
 ```{r}
 
 adapt_clusters_cd19_pos_down <- adapt_clusters_cd19_pos |>
-    tof_downsample(method = "constant", group_cols = visit, num_cells = 1000) 
+    tof_downsample(method = "constant", 
+                   group_cols = visit, 
+                   num_cells = 1000) 
 
 adapt_clusters_cd19_pos_tsne <- adapt_clusters_cd19_pos_down |>
     tof_reduce_tsne(num_comp = 3)
@@ -283,6 +283,7 @@ colours = colorRampPalette((brewer.pal(n = 9, name = "Spectral")))(50)) +
 ```{r}
 clust_cols <- c("cd19", "cd20", "cd38", "cxcr3", "ig_m", "ig_d", "cd21", "cd34", 
                 "cd24", "cd27", "cxcr4", "cxcr5", "cd138", "cd11c", "bcma")
+
 
 adapt_clusters_long <- adapt_clusters_cd19_pos_tsne |>
   select(cd19:bcma,.flowsom_metacluster:.tsne2,visit)|>
@@ -343,8 +344,11 @@ ggplot(adapt_clusters_long, aes(x = .tsne1, y = .tsne2, color = .flowsom_metaclu
 
 ```{r}
 
-p <- plot_ly(adapt_clusters_cd19_pos_tsne, x=~.tsne1, y=~.tsne2, 
-z=~.tsne3, color=~.flowsom_metacluster) 
+p <- plot_ly(adapt_clusters_cd19_pos_tsne, 
+             x=~.tsne1, 
+             y=~.tsne2, 
+             z=~.tsne3, 
+             color=~.flowsom_metacluster) 
 # %>%
 #      add_markers(size=1.5)
 print(p)
@@ -423,10 +427,20 @@ fviz_nbclust(df_neg, clara, method = "wss", k.max = 15,
 
 ```{r}
 set.seed(123)
-clust_cols_neg <- c("cd20", "cd38", "cxcr3",  "cd21", "cd34", "cd24", "cd27", "cxcr4", "cxcr5", "cd138", "cd11c", "bcma")
+# clust_cols_neg <- c("cd20", "cd38", "cxcr3",  "cd21", "cd34", "cd24", "cd27", "cxcr4", "cxcr5", "cd138", "cd11c", "bcma")
+
+clust_cols_neg <- c("cd38",  
+                    # "cd34", 
+                # "cd24", 
+                "cd27", 
+                # "cxcr4", "cxcr5", 
+                "cd138", "bcma")
     
-adapt_clusters_cd19_neg <- adapt |> filter(population == "CD19-") |>
-    tof_cluster(method = "flowsom", cluster_cols = all_of(clust_cols_neg), num_metaclusters = 10) 
+adapt_clusters_cd19_neg <- adapt |> 
+    filter(population == "CD19-") |>
+    tof_cluster(method = "flowsom", 
+                cluster_cols = all_of(clust_cols_neg), 
+                num_metaclusters = 6) 
 ```
 
 ##### Step 3: Downsample and Reduce Dimensions (t-SNE)
@@ -447,6 +461,7 @@ adapt_clusters_cd19_neg_tsne <- adapt_clusters_cd19_neg_full
 ```
 
 ### Visualization
+
 
 #### Plotting Clusters and Expression Levels
 
@@ -515,7 +530,7 @@ colours = colorRampPalette((brewer.pal(n = 11, name = "Spectral")))(50)) +
 
 ```
 
-#### Expression by Marker
+#### Visualize Clusters in 2 and 3 dimension
 
 ```{r}
 cluster_labels <- adapt_clusters_long |>
@@ -525,6 +540,26 @@ cluster_labels <- adapt_clusters_long |>
     label_y = median(.tsne2, na.rm = TRUE),
     .groups = 'drop'
   )
+
+
+ggplot(adapt_clusters_long, aes(x = .tsne1, y = .tsne2, color = .flowsom_metacluster)) +
+  geom_point() +  
+  #facet_wrap(~ marker, scales = "free") +
+  geom_text(
+    data = cluster_labels,
+    aes(x = label_x, y = label_y, label = .flowsom_metacluster),
+    color = "black",  
+    size = 3,
+    vjust = -0.5
+  ) +
+  theme_bw() +
+  labs(title="CD19 Neg Bone Marrow B cell Lineage")+
+  scale_color_manual(values = colorRampPalette(brewer.pal(n = min(11, num_clusters), name = "Spectral"))(num_clusters)) +
+  #scale_alpha_continuous(range = c(0.2, 1)) +  # Broaden alpha range for better brightness contrast
+  #labs(color = "Cluster", alpha = "Expression") +
+  theme(aspect.ratio = 0.50) +
+    guides(color = "none")
+
 
 
 ggplot(adapt_clusters_long, aes(x = .tsne1, y = .tsne2, color = .flowsom_metacluster)) +
@@ -557,6 +592,7 @@ z=~.tsne3, color=~.flowsom_metacluster)
 print(p)
 
 ```
+
 
 ##### Step 4: Differntial discovery analysis
 
